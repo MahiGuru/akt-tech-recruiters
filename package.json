@@ -1,0 +1,41 @@
+{
+  "name": "akt-tech-recruiters",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed-jobs": "node scripts/run-seed.js"
+  },
+  "dependencies": {
+    "@headlessui/react": "^1.7.17",
+    "@prisma/client": "^6.9.0",
+    "autoprefixer": "^10.4.21",
+    "axios": "^1.9.0",
+    "bcrypt": "^6.0.0",
+    "date-fns": "^2.30.0",
+    "framer-motion": "^10.16.4",
+    "lucide-react": "^0.263.1",
+    "next": "15.3.3",
+    "next-auth": "^4.24.11",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.16.0",
+    "postcss": "^8.5.4",
+    "prisma": "^6.9.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.47.0",
+    "react-hot-toast": "^2.4.1",
+    "zustand": "^5.0.5",
+    "multer": "^1.4.5-lts.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4.1.8",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.3",
+    "tailwindcss": "^4.1.8"
+  }
+}
