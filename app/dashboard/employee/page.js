@@ -14,6 +14,7 @@ import {
   Phone,
   Mail
 } from 'lucide-react'
+import Link from 'next/link';
 
 export default function EmployeeDashboard() {
   const router = useRouter()
@@ -92,7 +93,7 @@ export default function EmployeeDashboard() {
                   className="btn-secondary"
                 >
                   <Edit className="w-4 h-4" />
-                  Edit
+                  <Link href="/profile/edit">Edit</Link>
                 </button>
               </div>
               
@@ -160,7 +161,8 @@ export default function EmployeeDashboard() {
                 
                 <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-400 hover:bg-primary-50 transition-colors text-left">
                   <FileText className="w-8 h-8 text-primary-600 mb-2" />
-                  <h3 className="font-semibold text-gray-900">Update Profile</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    <Link href={'/profile/edit'}>Update Profile</Link></h3>
                   <p className="text-sm text-gray-600">Keep your info current</p>
                 </button>
               </div>

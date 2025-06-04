@@ -17,7 +17,7 @@ import {
   X,
   Award
 } from 'lucide-react'
-import ResumeUpload from '@/components/ResumeUpload'
+import ResumeUpload from '../../components/ResumeUpload';
 
 export default function EditProfile() {
   const router = useRouter()

@@ -6,15 +6,18 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
-import { User, Building, Mail, Lock, Phone, MapPin } from 'lucide-react'
+import { User, Building, Mail, Lock, Phone, MapPin, Eye, EyeOff } from 'lucide-react'
 
 export default function Register() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [role, setRole] = useState(searchParams.get('role') || 'EMPLOYEE')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const { register, handleSubmit, formState: { errors }, watch } = useForm()
 
   const onSubmit = async (data) => {
+    setIsLoading(true)
     try {
       const response = await fetch('/api/auth/register', {
         method: 'POST',
@@ -31,148 +34,175 @@ export default function Register() {
       }
     } catch (error) {
       toast.error('Something went wrong')
+    } finally {
+      setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Skip Link */}
+      <a href="#registration-form" className="skip-link">
+        Skip to registration form
+      </a>
+
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
         className="max-w-md w-full space-y-8"
       >
-        <div>
-          <Link href="/" className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-12 h-12 gradient-bg rounded-xl flex items-center justify-center">
-              <User className="w-7 h-7 text-white" />
+        {/* Header */}
+        <div className="text-center">
+          <Link href="/" className="inline-flex items-center gap-3 mb-8" aria-label="TalentHub Home">
+            <div className="logo w-12 h-12">
+              <User className="w-7 h-7" />
             </div>
-            <span className="text-2xl font-bold text-gray-900">AKT Talents</span>
+            <span className="text-2xl font-bold text-gradient">TalentHub</span>
           </Link>
           
-          <h2 className="text-center text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold mb-3">
             Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          </h1>
+          <p className="text-secondary-600">
             Join our community of professionals
           </p>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="card">
           {/* Role Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              I am a:
-            </label>
+          <fieldset className="mb-8">
+            <legend className="form-label mb-4">I am a:</legend>
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
                 onClick={() => setRole('EMPLOYEE')}
-                className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                className={`p-4 border-2 rounded-xl flex flex-col items-center gap-3 transition-all duration-200 ${
                   role === 'EMPLOYEE' 
-                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-md scale-105' 
+                    : 'border-secondary-200 hover:border-secondary-300 hover:bg-secondary-50'
                 }`}
+                aria-pressed={role === 'EMPLOYEE'}
               >
                 <User className="w-6 h-6" />
-                <span className="font-medium">Job Seeker</span>
+                <span className="font-semibold">Job Seeker</span>
               </button>
               <button
                 type="button"
                 onClick={() => setRole('EMPLOYER')}
-                className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition-colors ${
+                className={`p-4 border-2 rounded-xl flex flex-col items-center gap-3 transition-all duration-200 ${
                   role === 'EMPLOYER' 
-                    ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 shadow-md scale-105' 
+                    : 'border-secondary-200 hover:border-secondary-300 hover:bg-secondary-50'
                 }`}
+                aria-pressed={role === 'EMPLOYER'}
               >
                 <Building className="w-6 h-6" />
-                <span className="font-medium">Employer</span>
+                <span className="font-semibold">Employer</span>
               </button>
             </div>
-          </div>
+          </fieldset>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <form id="registration-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
+            {/* Name Field */}
+            <div className="form-group">
+              <label htmlFor="name" className="form-label required">
                 Full Name
               </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="input-with-icon">
                 <input
-                  {...register('name', { required: 'Name is required' })}
-                  className="input-field pl-10"
+                  id="name"
+                  {...register('name', { 
+                    required: 'Name is required',
+                    minLength: { value: 2, message: 'Name must be at least 2 characters' }
+                  })}
+                  className={`input-field ${errors.name ? 'error' : ''}`}
                   placeholder="John Doe"
+                  aria-describedby={errors.name ? 'name-error' : undefined}
                 />
+                <User className="input-icon" aria-hidden="true" />
               </div>
               {errors.name && (
-                <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
+                <div id="name-error" className="form-error" role="alert">
+                  {errors.name.message}
+                </div>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            {/* Email Field */}
+            <div className="form-group">
+              <label htmlFor="email" className="form-label required">
                 Email Address
               </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="input-with-icon">
                 <input
+                  id="email"
+                  type="email"
                   {...register('email', { 
                     required: 'Email is required',
                     pattern: {
                       value: /^\S+@\S+$/i,
-                      message: 'Invalid email address'
+                      message: 'Please enter a valid email address'
                     }
                   })}
-                  type="email"
-                  className="input-field pl-10"
+                  className={`input-field ${errors.email ? 'error' : ''}`}
                   placeholder="john@example.com"
+                  aria-describedby={errors.email ? 'email-error' : undefined}
                 />
+                <Mail className="input-icon" aria-hidden="true" />
               </div>
               {errors.email && (
-                <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+                <div id="email-error" className="form-error" role="alert">
+                  {errors.email.message}
+                </div>
               )}
             </div>
 
+            {/* Employee-specific fields */}
             {role === 'EMPLOYEE' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="form-group">
+                  <label htmlFor="phone" className="form-label">
                     Phone Number
                   </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <div className="input-with-icon">
                     <input
-                      {...register('phone')}
+                      id="phone"
                       type="tel"
-                      className="input-field pl-10"
+                      {...register('phone')}
+                      className="input-field"
                       placeholder="+1 (555) 123-4567"
                     />
+                    <Phone className="input-icon" aria-hidden="true" />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="form-group">
+                  <label htmlFor="location" className="form-label">
                     Location
                   </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <div className="input-with-icon">
                     <input
+                      id="location"
                       {...register('location')}
-                      className="input-field pl-10"
+                      className="input-field"
                       placeholder="New York, NY"
                     />
+                    <MapPin className="input-icon" aria-hidden="true" />
                   </div>
                 </div>
               </>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            {/* Password Field */}
+            <div className="form-group">
+              <label htmlFor="password" className="form-label required">
                 Password
               </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="input-with-icon">
                 <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
                   {...register('password', { 
                     required: 'Password is required',
                     minLength: {
@@ -180,25 +210,56 @@ export default function Register() {
                       message: 'Password must be at least 6 characters'
                     }
                   })}
-                  type="password"
-                  className="input-field pl-10"
+                  className={`input-field ${errors.password ? 'error' : ''}`}
                   placeholder="••••••••"
+                  aria-describedby={errors.password ? 'password-error' : 'password-help'}
                 />
+                <Lock className="input-icon" aria-hidden="true" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-secondary-400 hover:text-secondary-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
-              {errors.password && (
-                <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              {errors.password ? (
+                <div id="password-error" className="form-error" role="alert">
+                  {errors.password.message}
+                </div>
+              ) : (
+                <div id="password-help" className="text-xs text-secondary-500 mt-1">
+                  Must be at least 6 characters long
+                </div>
               )}
             </div>
 
-            <button type="submit" className="w-full btn-primary justify-center py-3">
-              Create Account
+            {/* Submit Button */}
+            <button 
+              type="submit" 
+              disabled={isLoading}
+              className="btn btn-primary w-full"
+              aria-describedby="submit-help"
+            >
+              {isLoading ? (
+                <>
+                  <div className="loading-spinner" aria-hidden="true" />
+                  Creating Account...
+                </>
+              ) : (
+                'Create Account'
+              )}
             </button>
+            <div id="submit-help" className="sr-only">
+              Click to create your TalentHub account
+            </div>
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-secondary-600">
               Already have an account?{' '}
-              <Link href="/auth/login" className="font-medium text-primary-600 hover:text-primary-500">
+              <Link href="/auth/login" className="font-medium text-primary-600 hover:text-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 rounded">
                 Sign in
               </Link>
             </p>
