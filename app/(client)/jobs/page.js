@@ -1,24 +1,25 @@
 'use client'
 
 import { useEffect, useState } from 'react';
-
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
 import { 
   Briefcase, 
   Building, 
   Clock, 
-  DollarSign, 
-  Filter, 
+  IndianRupeeIcon, 
+  Filter,
   MapPin, 
   Search, 
   Star 
 } from 'lucide-react';
-import SeedJobsButton from '../components/SeedJobsButton';
-import useStore from '../store/authStore';
+import SeedJobsButton from '../../components/SeedJobsButton';
+import JobDescriptionRenderer from '../../components/JobDescriptionRenderer';
+import useStore from '../../store/authStore';
+import Image from 'next/image';
 
 export default function Jobs() {
-
   const {
     jobs,
     setJobs,
@@ -91,10 +92,9 @@ export default function Jobs() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">AKT Talents</span>
+              <span className="text-2xl font-bold text-gray-900">
+                <Image src={"/logo.svg"} alt="AKT Talents Logo" width={'300'} height={'120'}/>
+              </span>
             </Link>
             
             <div className="flex items-center gap-4">
@@ -116,7 +116,6 @@ export default function Jobs() {
          */}
         {/* <SeedJobsButton /> */}
 
-        
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">Find Your Next Job</h1>
@@ -166,6 +165,8 @@ export default function Jobs() {
             </button>
           </div>
         </div>
+
+        {/* Jobs List */}
         <div className="space-y-6">
           {loading ? (
             <div className="text-center py-12">
@@ -187,64 +188,135 @@ export default function Jobs() {
                 transition={{ duration: 0.4, delay: index * 0.1 }}
                 className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
               >
- 
-                <div className="flex justify-between items-start m-2">
+                <div className="flex justify-between items-start">
                   <div className="flex-1">
+                    {/* Job Header */}
                     <div className="flex items-center gap-4 mb-4">
                       <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
                         <Building className="w-6 h-6 text-primary-600" />
                       </div>
                       <div>
                         <h3 className="text-xl font-semibold text-gray-900">{job.title}</h3>
-                        <p className="text-gray-600">{job.company}</p>
+                        <p className="text-gray-600 font-medium">{job.company}</p>
                       </div>
                     </div>
                     
+                    {/* Job Meta Information */}
                     <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-gray-600">
                       <div className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" />
-                        {job.location}
+                        <span className="font-medium">{job.location}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        {job.type.replace('_', ' ')}
+                        <span className="font-medium">{job.type?.replace('_', ' ')}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <DollarSign className="w-4 h-4" />
-                        {job.salary}
+                        <IndianRupeeIcon className="w-4 h-4" />
+                        <span className="font-medium text-green-600">{job.salary}</span>
                       </div>
                     </div>
                     
-                    <p className="text-gray-700 mb-4 line-clamp-3">
-                      {job.description}
-                    </p>
+                    {/* Job Description with Rich Text Rendering */}
+                    <div className="mb-4">
+                      <JobDescriptionRenderer 
+                        description={job.description || 'No description available'} 
+                        maxLength={200}
+                      />
+                    </div>
                     
+                    {/* Job Skills/Requirements Tags */}
+                    {job.skills && job.skills.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Required Skills:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {job.skills.slice(0, 5).map((skill, idx) => (
+                            <span 
+                              key={idx} 
+                              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {job.skills.length > 5 && (
+                            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                              +{job.skills.length - 5} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Job Requirements */}
                     {job.requirements && job.requirements.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {job.requirements.slice(0, 3).map((req, idx) => (
-                          <span key={idx} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-                            {req}
-                          </span>
-                        ))}
-                        {job.requirements.length > 3 && (
-                          <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-                            +{job.requirements.length - 3} more
-                          </span>
-                        )}
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Requirements:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {job.requirements.slice(0, 3).map((req, idx) => (
+                            <span 
+                              key={idx} 
+                              className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium"
+                            >
+                              {req}
+                            </span>
+                          ))}
+                          {job.requirements.length > 3 && (
+                            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                              +{job.requirements.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Job Benefits */}
+                    {job.benefits && job.benefits.length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Benefits:</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {job.benefits.slice(0, 3).map((benefit, idx) => (
+                            <span 
+                              key={idx} 
+                              className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium"
+                            >
+                              ✨ {benefit}
+                            </span>
+                          ))}
+                          {job.benefits.length > 3 && (
+                            <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
+                              +{job.benefits.length - 3} more
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
                   
-                  <div className="ml-6">
+                  {/* Apply Button and Date */}
+                  <div className="ml-6 flex flex-col items-end">
                     <button
                       onClick={() => handleApply(job.id)}
-                      className="btn-primary"
+                      className="btn-primary mb-3 whitespace-nowrap"
                     >
                       Apply Now
                     </button>
-                    <p className="text-xs text-gray-500 mt-2">
-                      Posted {new Date(job.createdAt).toLocaleDateString()}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">
+                        Posted {new Date(job.createdAt).toLocaleDateString()}
+                      </p>
+                      {job.jobTypes && job.jobTypes.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2 justify-end">
+                          {job.jobTypes.slice(0, 2).map((type, idx) => (
+                            <span 
+                              key={idx}
+                              className="px-2 py-1 bg-gray-200 text-gray-600 rounded text-xs font-medium"
+                            >
+                              {type.replace('_', ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </motion.div>

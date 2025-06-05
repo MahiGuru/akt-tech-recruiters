@@ -37,8 +37,7 @@ export async function GET(request) {
             phone: true,
             location: true,
             experience: true,
-            skills: true,
-            resumeUrl: true
+            skills: true
           }
         }
       },
@@ -60,7 +59,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json()
-    const { jobId, employeeId, coverLetter } = body
+    const { jobId, employeeId, coverLetter, resumeId } = body
 
     // Check if application already exists
     const existingApplication = await prisma.application.findUnique({
@@ -79,11 +78,38 @@ export async function POST(request) {
       )
     }
 
+    // Get resume information if resumeId is provided
+    let resumeUsed = null
+    if (resumeId) {
+      const resume = await prisma.resume.findUnique({
+        where: { id: resumeId },
+        select: { title: true, experienceLevel: true }
+      })
+      
+      if (resume) {
+        resumeUsed = `${resume.title} (${resume.experienceLevel.replace('_', ' ')})`
+      }
+    } else {
+      // If no specific resume, try to use the primary resume
+      const primaryResume = await prisma.resume.findFirst({
+        where: { 
+          userId: employeeId,
+          isPrimary: true 
+        },
+        select: { id: true, title: true, experienceLevel: true }
+      })
+      
+      if (primaryResume) {
+        resumeUsed = `${primaryResume.title} (${primaryResume.experienceLevel.replace('_', ' ')})`
+      }
+    }
+
     const application = await prisma.application.create({
       data: {
         jobId,
         employeeId,
-        coverLetter: coverLetter || null
+        coverLetter: coverLetter || null,
+        resumeUsed
       },
       include: {
         job: {

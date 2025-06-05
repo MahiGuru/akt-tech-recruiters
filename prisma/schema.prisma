@@ -89,7 +89,6 @@ model Resume {
   userId         String
   user           User            @relation(fields: [userId], references: [id])
 }
-
 enum ExperienceLevel {
   ENTRY_LEVEL
   MID_LEVEL

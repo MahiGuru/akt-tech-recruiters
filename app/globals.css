@@ -291,7 +291,29 @@ select:focus-visible {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+.input-with-icon {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
+}
+.input-with-icon input {
+  margin-right: 1rem; /* Adjust based on icon size */
+}
+.bg-primary-500{
+  background-color: var(--primary-500);
+}
+
+.form-error{
+  color:red;
+  font-size: 0.8rem;
+}
+.bg-red-50 {
+  background: #fff1f1;
+}
+.show-password-icon{
+  right: 5rem;
+}
 /* Print Styles */
 @media print {
   .no-print {

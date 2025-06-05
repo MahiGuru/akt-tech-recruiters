@@ -13,6 +13,7 @@ import {
   MapPin,
   Building
 } from 'lucide-react'
+import Image from 'next/image'
 
 export default function Home() {
   return (
@@ -22,10 +23,12 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
+              {/* <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
                 <Briefcase className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">AKT Talents</span>
+              </div> */}
+              <span className="text-2xl font-bold text-gray-900">
+                <Image src={"/logo.svg"} alt="AKT Talents Logo" width={'300'} height={'120'}/>
+              </span>
             </div>
             
             <div className="hidden md:flex items-center gap-8">

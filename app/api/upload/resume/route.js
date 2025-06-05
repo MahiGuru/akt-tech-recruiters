@@ -1,17 +1,17 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '../../../lib/prisma';
-import { writeFile, unlink, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { NextResponse } from 'next/server'
+import { prisma } from '../../../lib/prisma'
+import { writeFile, unlink, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
 
-const UPLOAD_DIR = join(process.cwd(), 'public/uploads/resumes');
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const UPLOAD_DIR = join(process.cwd(), 'public/uploads/resumes')
+const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_TYPES = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain'
-];
+]
 
 // Ensure upload directory exists
 async function ensureUploadDir() {

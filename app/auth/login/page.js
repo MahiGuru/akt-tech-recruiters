@@ -49,13 +49,7 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         className="max-w-md w-full space-y-8"
       >
-        <div>
-          <Link href="/" className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-12 h-12 gradient-bg rounded-xl flex items-center justify-center">
-              <User className="w-7 h-7 text-white" />
-            </div>
-            <span className="text-2xl font-bold text-gray-900">AKT Talents</span>
-          </Link>
+        <div> 
           
           <h2 className="text-center text-3xl font-bold text-gray-900">
             Welcome back
