@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import AutoResumeJobMatcher from '../../../components/AutoResumeJobMatcher';
 import { 
   Plus, 
   Briefcase, 
@@ -18,6 +19,7 @@ export default function EmployerDashboard() {
   const [user, setUser] = useState(null)
   const [jobs, setJobs] = useState([])
   const [applications, setApplications] = useState([])
+  const [activeSection, setActiveSection] = useState('job-matcher');
 
   useEffect(() => {
     const userData = localStorage.getItem('user')
@@ -202,6 +204,16 @@ export default function EmployerDashboard() {
               ))}
             </div>
           )}
+        </div>
+        {/* Auto Resume Job Matcher Section */}
+        <div className="card mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Resume Matching!!</h2> 
+            <div className="space-y-4">
+              <p className="text-gray-600 mb-4">
+                Use our AI-powered resume matcher to find the best candidates for your jobs.
+              </p>
+              <AutoResumeJobMatcher />
+          </div>
         </div>
 
         {/* Recent Applications */}

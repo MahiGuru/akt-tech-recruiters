@@ -305,7 +305,7 @@ select:focus-visible {
 }
 
 .form-error{
-  color:red;
+  color:rgb(196, 0, 0);
   font-size: 0.8rem;
 }
 .bg-red-50 {
