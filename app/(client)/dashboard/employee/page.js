@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
@@ -15,14 +16,17 @@ import {
   Phone,
   Mail,
   Calendar,
-  TrendingUp
+  TrendingUp,
+  LogOut
 } from 'lucide-react'
 import MultipleResumeUpload from '../../../components/MultipleResumeUpload'
 import ResumeUpload from '@/app/components/ResumeUpload'
+import useStore from '../../../store/authStore'
 
 export default function EmployeeDashboard() {
+  const { data: session, status } = useSession()
   const router = useRouter()
-  const [user, setUser] = useState(null)
+  const { user: storeUser, updateUser } = useStore()
   const [applications, setApplications] = useState([])
   const [isEditing, setIsEditing] = useState(false)
   const [showResumeUpload, setShowResumeUpload] = useState(true)
@@ -32,23 +36,27 @@ export default function EmployeeDashboard() {
     viewedApplications: 0
   })
 
+  // Use session user or store user as fallback
+  const user = session?.user || storeUser
+
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) {
+    if (status === 'loading') return
+    
+    if (!session) {
       router.push('/auth/login')
       return
     }
     
-    const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== 'EMPLOYEE') {
+    if (session.user.role !== 'EMPLOYEE') {
       router.push('/dashboard/employer')
       return
     }
     
-    setUser(parsedUser)
-    fetchApplications(parsedUser.id)
-    setShowResumeUpload(!parsedUser.resumeUrl)
-  }, [router])
+    if (session.user.id) {
+      fetchApplications(session.user.id)
+      setShowResumeUpload(!session.user.resumeUrl)
+    }
+  }, [session, status, router])
 
   const fetchApplications = async (userId) => {
     try {
@@ -70,25 +78,25 @@ export default function EmployeeDashboard() {
   }
 
   const handleResumeUploadSuccess = (url, filename) => {
-    setUser(prev => ({ ...prev, resumeUrl: url }))
+    // Update the session user data
+    updateUser({ resumeUrl: url })
     setShowResumeUpload(false)
-    
-    // Update localStorage
-    const updatedUser = { ...user, resumeUrl: url }
-    localStorage.setItem('user', JSON.stringify(updatedUser))
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('user')
-    router.push('/')
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/' })
   }
 
-  if (!user) {
+  if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="loading-spinner w-8 h-8 text-primary-600" />
       </div>
     )
+  }
+
+  if (!session || !user) {
+    return null
   }
 
   return (
@@ -105,8 +113,18 @@ export default function EmployeeDashboard() {
             </div>
             
             <div className="flex items-center gap-4">
-              <span className="text-secondary-600 hidden sm:block">Welcome, {user.name}</span>
+              <div className="flex items-center gap-3">
+                {user.image && (
+                  <img 
+                    src={user.image} 
+                    alt={user.name} 
+                    className="w-8 h-8 rounded-full"
+                  />
+                )}
+                <span className="text-secondary-600 hidden sm:block">Welcome, {user.name}</span>
+              </div>
               <button onClick={handleLogout} className="btn btn-secondary btn-sm">
+                <LogOut className="w-4 h-4" />
                 Logout
               </button>
             </div>
@@ -133,8 +151,16 @@ export default function EmployeeDashboard() {
               </div>
               
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <User className="w-10 h-10 text-primary-600" />
+                <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center mx-auto mb-4 overflow-hidden">
+                  {user.image ? (
+                    <img 
+                      src={user.image} 
+                      alt={user.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-10 h-10 text-primary-600" />
+                  )}
                 </div>
                 <h3 className="text-xl font-bold mb-1">{user.name}</h3>
                 <p className="text-secondary-600">{user.email}</p>
@@ -218,6 +244,7 @@ export default function EmployeeDashboard() {
                 </button>
               </div>
             </div>
+            
             <div className="card">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold">Resume</h3>
@@ -265,6 +292,7 @@ export default function EmployeeDashboard() {
                 </div>
               )}
             </div>
+            
             {/* My Applications */}
             <div className="card">
               <div className="flex justify-between items-center mb-6">

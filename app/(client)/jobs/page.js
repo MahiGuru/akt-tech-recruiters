@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { 
@@ -12,7 +14,11 @@ import {
   Filter,
   MapPin, 
   Search, 
-  Star 
+  Star,
+  User,
+  LogOut,
+  Settings,
+  ChevronDown
 } from 'lucide-react';
 import SeedJobsButton from '../../components/SeedJobsButton';
 import JobDescriptionRenderer from '../../components/JobDescriptionRenderer';
@@ -20,6 +26,9 @@ import useStore from '../../store/authStore';
 import Image from 'next/image';
 
 export default function Jobs() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const {
     jobs,
     setJobs,
@@ -61,17 +70,17 @@ export default function Jobs() {
   });
 
   const handleApply = async (jobId) => {
-    try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      if (!user.id) {
-        toast.error('Please login to apply for jobs');
-        return;
-      }
+    if (!session) {
+      toast.error('Please sign in to apply for jobs');
+      router.push('/auth/login');
+      return;
+    }
 
+    try {
       const response = await fetch('/api/applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, employeeId: user.id }),
+        body: JSON.stringify({ jobId, employeeId: session.user.id }),
       });
 
       if (response.ok) {
@@ -85,6 +94,33 @@ export default function Jobs() {
     }
   };
 
+  const handleDashboardRedirect = () => {
+    if (session?.user?.role === 'EMPLOYER') {
+      router.push('/dashboard/employer');
+    } else {
+      router.push('/dashboard/employee');
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/' });
+    setShowUserMenu(false);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUserMenu && !event.target.closest('.user-menu')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
@@ -92,18 +128,140 @@ export default function Jobs() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center gap-2">
-              <span className="text-2xl font-bold text-gray-900">
-                <Image src={"/logo.svg"} alt="At Bench Logo" width={'300'} height={'120'}/>
-              </span>
+              <Image src="/logo.svg" alt="At Bench Logo" width={300} height={120}/>
             </Link>
             
             <div className="flex items-center gap-4">
-              <Link href="/auth/login" className="btn-secondary">
-                Sign In
-              </Link>
-              <Link href="/auth/register" className="btn-primary">
-                Get Started
-              </Link>
+              {status === 'loading' ? (
+                <div className="loading-spinner w-6 h-6" />
+              ) : session ? (
+                /* Authenticated User Menu */
+                <div className="relative user-menu">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {session.user.image ? (
+                        <img 
+                          src={session.user.image} 
+                          alt={session.user.name} 
+                          className="w-8 h-8 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-primary-600" />
+                        </div>
+                      )}
+                      <span className="hidden sm:block text-gray-700 font-medium">
+                        {session.user.name}
+                      </span>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showUserMenu && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50"
+                    >
+                      {/* User Info */}
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <div className="flex items-center gap-3">
+                          {session.user.image ? (
+                            <img 
+                              src={session.user.image} 
+                              alt={session.user.name} 
+                              className="w-10 h-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                              <User className="w-5 h-5 text-primary-600" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {session.user.name}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {session.user.email}
+                            </p>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium mt-1 ${
+                              session.user.role === 'EMPLOYER' 
+                                ? 'bg-purple-100 text-purple-800' 
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {session.user.role === 'EMPLOYER' ? 'Employer' : 'Job Seeker'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Menu Items */}
+                      <div className="py-2">
+                        <button
+                          onClick={() => {
+                            handleDashboardRedirect();
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          <Briefcase className="w-4 h-4" />
+                          Go to Dashboard
+                        </button>
+                        
+                        <button
+                          onClick={() => {
+                            router.push('/profile/edit');
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Edit Profile
+                        </button>
+                        
+                        {session.user.role === 'EMPLOYER' && (
+                          <button
+                            onClick={() => {
+                              router.push('/post-job');
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            <Star className="w-4 h-4" />
+                            Post a Job
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Logout */}
+                      <div className="border-t border-gray-100 pt-2">
+                        <button
+                          onClick={handleLogout}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Sign Out
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              ) : (
+                /* Unauthenticated User Buttons */
+                <>
+                  <Link href="/auth/login" className="btn-secondary">
+                    Sign In
+                  </Link>
+                  <Link href="/auth/register" className="btn-primary">
+                    Get Started
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

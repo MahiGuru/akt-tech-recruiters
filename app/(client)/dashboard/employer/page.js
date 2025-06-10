@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import AutoResumeJobMatcher from '../../../components/AutoResumeJobMatcher';
@@ -11,33 +12,37 @@ import {
   Eye,
   Edit,
   Trash2,
-  Building
+  Building,
+  LogOut
 } from 'lucide-react'
 
 export default function EmployerDashboard() {
+  const { data: session, status } = useSession()
   const router = useRouter()
-  const [user, setUser] = useState(null)
   const [jobs, setJobs] = useState([])
   const [applications, setApplications] = useState([])
   const [activeSection, setActiveSection] = useState('job-matcher');
 
+  const user = session?.user
+
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) {
+    if (status === 'loading') return
+    
+    if (!session) {
       router.push('/auth/login')
       return
     }
     
-    const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== 'EMPLOYER') {
+    if (session.user.role !== 'EMPLOYER') {
       router.push('/dashboard/employee')
       return
     }
     
-    setUser(parsedUser)
-    fetchJobs(parsedUser.id)
-    fetchApplications(parsedUser.id)
-  }, [router])
+    if (session.user.id) {
+      fetchJobs(session.user.id)
+      fetchApplications(session.user.id)
+    }
+  }, [session, status, router])
 
   const fetchJobs = async (userId) => {
     try {
@@ -63,12 +68,21 @@ export default function EmployerDashboard() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('user')
-    router.push('/')
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/' })
   }
 
-  if (!user) return null
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="loading-spinner w-8 h-8 text-primary-600" />
+      </div>
+    )
+  }
+
+  if (!session || !user) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,8 +98,18 @@ export default function EmployerDashboard() {
             </div>
             
             <div className="flex items-center gap-4">
-              <span className="text-gray-600">Welcome, {user.name}</span>
+              <div className="flex items-center gap-3">
+                {user.image && (
+                  <img 
+                    src={user.image} 
+                    alt={user.name} 
+                    className="w-8 h-8 rounded-full"
+                  />
+                )}
+                <span className="text-gray-600">Welcome, {user.name}</span>
+              </div>
               <button onClick={handleLogout} className="btn-secondary">
+                <LogOut className="w-4 h-4" />
                 Logout
               </button>
             </div>
@@ -205,6 +229,7 @@ export default function EmployerDashboard() {
             </div>
           )}
         </div>
+        
         {/* Auto Resume Job Matcher Section */}
         <div className="card mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Resume Matching!!</h2> 

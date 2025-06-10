@@ -7,14 +7,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      Role     @default(EMPLOYEE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(EMPLOYEE)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Employee specific fields
   phone        String?
@@ -24,12 +65,16 @@ model User {
   resumeUrl    String?
   bio          String?
   
-  // Relations
+  // NextAuth relations
+  accounts Account[]
+  sessions Session[]
+  
+  // App relations
   jobPosts     Job[]
   applications Application[]
+  Resume       Resume[]
 
   @@map("users")
-  Resume Resume[]
 }
 
 model Job {
@@ -55,11 +100,12 @@ model Job {
 }
 
 model Application {
-  id        String            @id @default(cuid())
-  status    ApplicationStatus @default(PENDING)
+  id          String            @id @default(cuid())
+  status      ApplicationStatus @default(PENDING)
   coverLetter String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  resumeUsed  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   // Relations
   jobId      String
@@ -89,11 +135,14 @@ model Resume {
   userId         String
   user           User            @relation(fields: [userId], references: [id])
 }
+
 enum ExperienceLevel {
   ENTRY_LEVEL
   MID_LEVEL
   SENIOR_LEVEL
-  EXPERT
+  EXECUTIVE
+  FREELANCE
+  INTERNSHIP
 }
 
 enum Role {
