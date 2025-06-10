@@ -642,7 +642,7 @@ const AutoResumeJobMatcher = () => {
                       ))}
                     </div>
                     <div className="mt-2 text-xs text-red-600">
-                      💡 Solutions: Install pdf-parse for PDFs, check file permissions, ensure files aren't corrupted
+                      💡 Solutions: Install pdf-parse for PDFs, check file permissions, ensure files aren&apos;t corrupted
                     </div>
                   </div>
                 )}

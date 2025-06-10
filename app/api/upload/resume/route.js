@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma'
+import { prisma } from '../../../(client)/lib/prisma'
 import { writeFile, unlink, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'

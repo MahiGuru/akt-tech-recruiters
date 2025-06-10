@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import MultipleResumeUpload from '../../components/MultipleResumeUpload';
-import ResumeUploadDebug from '../../components/ResumeUpload';
+import MultipleResumeUpload from '../components/MultipleResumeUpload';
+import ResumeUploadDebug from '../components/ResumeUpload';
 
 export default function TestUploadPage() {
   const router = useRouter()

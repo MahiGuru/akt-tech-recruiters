@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeResumeMatch } from '../../../lib/openai';
-import { extractTextFromFile, getAllResumeFiles } from '../../../lib/fileProcessor';
+import { analyzeResumeMatch } from '../../../(client)/lib/openai';
+import { extractTextFromFile, getAllResumeFiles } from '../../../(client)/lib/fileProcessor';
 
 export async function POST(request) {
   try {

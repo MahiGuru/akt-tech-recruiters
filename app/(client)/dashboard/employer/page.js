@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import AutoResumeJobMatcher from '../../../components/AutoResumeJobMatcher';
+import AutoResumeJobMatcher from '../../components/AutoResumeJobMatcher';
 import { 
   Plus, 
   Briefcase, 

@@ -17,27 +17,7 @@ import {
   X,
   Award
 } from 'lucide-react'
-import ResumeUpload from '../../../components/ResumeUpload'
-'use client'
-
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import { useForm } from 'react-hook-form'
-import toast from 'react-hot-toast'
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Briefcase,
-  Save,
-  ArrowLeft,
-  Plus,
-  X,
-  Award
-} from 'lucide-react'
-import ResumeUpload from '@/components/ResumeUpload'
+import ResumeUpload from '../../../components/ResumeUpload'   
 
 export default function EditProfile() {
   const router = useRouter()

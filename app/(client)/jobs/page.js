@@ -20,9 +20,9 @@ import {
   Settings,
   ChevronDown
 } from 'lucide-react';
-import SeedJobsButton from '../../components/SeedJobsButton';
-import JobDescriptionRenderer from '../../components/JobDescriptionRenderer';
-import useStore from '../../store/authStore';
+import SeedJobsButton from '../components/SeedJobsButton';
+import JobDescriptionRenderer from '../components/JobDescriptionRenderer';
+import useStore from '../store/authStore';
 import Image from 'next/image';
 
 export default function Jobs() {

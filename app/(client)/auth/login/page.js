@@ -248,7 +248,7 @@ export default function Login() {
           </div>
           <div className="space-y-3 mt-6"> 
 
-            <div class="flex items-center justify-center">
+            <div className="flex items-center justify-center">
             {socialProviders.map((provider) => (
                 <button
                   key={provider.id}
@@ -280,7 +280,7 @@ export default function Login() {
           {/* Register Link */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link href="/auth/register" className="font-medium text-primary-600 hover:text-primary-500">
                 Create account
               </Link>

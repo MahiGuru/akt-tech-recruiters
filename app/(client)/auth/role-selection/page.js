@@ -136,7 +136,7 @@ export default function RoleSelection() {
               Welcome {session.user.name}!
             </h1>
             <p className="text-secondary-600 text-lg">
-              Let's set up your account. Are you looking for a job or looking to hire?
+              Let&apos;s set up your account. Are you looking for a job or looking to hire?
             </p>
           </motion.div>
         </div>

@@ -19,9 +19,9 @@ import {
   TrendingUp,
   LogOut
 } from 'lucide-react'
-import MultipleResumeUpload from '../../../components/MultipleResumeUpload'
-import ResumeUpload from '@/app/components/ResumeUpload'
-import useStore from '../../../store/authStore'
+import MultipleResumeUpload from '../../components/MultipleResumeUpload'
+import ResumeUpload from '@/app/(client)/components/ResumeUpload'
+import useStore from '../../store/authStore'
 
 export default function EmployeeDashboard() {
   const { data: session, status } = useSession()

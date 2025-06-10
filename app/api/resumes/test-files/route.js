@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAllResumeFiles, extractTextFromFile } from '../../../lib/fileProcessor';
+import { getAllResumeFiles, extractTextFromFile } from '../../../(client)/lib/fileProcessor';
 
 export async function GET() {
   try {

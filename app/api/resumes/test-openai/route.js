@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { analyzeResumeMatch } from '../../../lib/openai';
+import { analyzeResumeMatch } from '../../../(client)/lib/openai';
 
 export async function POST() {
   try {

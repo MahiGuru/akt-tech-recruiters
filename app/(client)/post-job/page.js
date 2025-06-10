@@ -18,7 +18,7 @@ import {
   Star,
   Target
 } from 'lucide-react'
-import RichTextEditor from '../../components/RichTextEditor'
+import RichTextEditor from '../components/RichTextEditor'
 
 // Multi-select component
 const MultiSelect = ({ 
