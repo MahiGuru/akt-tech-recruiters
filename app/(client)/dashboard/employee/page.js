@@ -101,7 +101,7 @@ export default function EmployeeDashboard() {
               <div className="logo w-10 h-10">
                 <Briefcase className="w-6 h-6" />
               </div>
-              <span className="text-2xl font-bold text-gradient">TalentHub</span>
+              <span className="text-2xl font-bold text-gradient">At Bench</span>
             </div>
             
             <div className="flex items-center gap-4">

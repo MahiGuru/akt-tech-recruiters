@@ -229,8 +229,8 @@ async function seedJobs() {
     try {
       // First, create a sample employer account
       const employerData = {
-        name: "AKT Talents Admin",
-        email: "admin@AKT Talents.com",
+        name: "At Bench Admin",
+        email: "admin@At Bench.com",
         password: "password123",
         role: "EMPLOYER"
       };
@@ -298,7 +298,7 @@ async function seedJobs() {
       console.log(`\n🎉 Successfully created ${successCount} out of ${sampleJobs.length} jobs!`);
       console.log('\nYou can now:');
       console.log('1. Visit http://localhost:3000/jobs to see the job listings');
-      console.log('2. Login as employer with: admin@AKT Talents.com / password123');
+      console.log('2. Login as employer with: admin@At Bench.com / password123');
       console.log('3. View the employer dashboard to manage these jobs');
       
     } catch (error) {

@@ -27,7 +27,7 @@ export default function Home() {
                 <Briefcase className="w-6 h-6 text-white" />
               </div> */}
               <span className="text-2xl font-bold text-gray-900">
-                <Image src={"/logo.svg"} alt="AKT Talents Logo" width={'300'} height={'120'}/>
+                <Image src={"/logo.svg"} alt="At Bench Logo" width={'300'} height={'120'}/>
               </span>
             </div>
             
@@ -106,7 +106,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
-              Why Choose AKT Talents?
+              Why Choose At Bench?
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               We make hiring and job searching simple, efficient, and effective for everyone.
@@ -160,7 +160,7 @@ export default function Home() {
             Ready to Take the Next Step?
           </h2>
           <p className="text-xl text-white/90 mb-10">
-            Join thousands of professionals who have found their dream jobs through AKT Talents.
+            Join thousands of professionals who have found their dream jobs through At Bench.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/auth/register" className="bg-white text-primary-600 hover:bg-gray-100 px-8 py-4 rounded-lg font-semibold text-lg transition-colors flex items-center justify-center gap-2">
@@ -180,7 +180,7 @@ export default function Home() {
                 <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
                   <Briefcase className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold">AKT Talents</span>
+                <span className="text-xl font-bold">At Bench</span>
               </div>
               <p className="text-gray-400">
                 Connecting talent with opportunity in the modern world.
@@ -216,7 +216,7 @@ export default function Home() {
           </div>
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 AKT Talents. All rights reserved.</p>
+            <p>&copy; 2024 At Bench. All rights reserved.</p>
           </div>
         </div>
       </footer>

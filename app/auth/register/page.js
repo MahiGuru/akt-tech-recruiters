@@ -49,7 +49,7 @@ export default function Register() {
       })
 
       if (response.ok) {
-        toast.success('🎉 Registration successful! Welcome to TalentHub!')
+        toast.success('🎉 Registration successful! Welcome to AtBench!')
         router.push('/auth/login')
       } else {
         const error = await response.json()
@@ -151,7 +151,7 @@ export default function Register() {
             transition={{ delay: 0.2 }}
           >
             <h1 className="text-3xl font-bold text-secondary-900 mb-3">
-              Join TalentHub Today
+              Join At Bench Today
             </h1>
             <p className="text-secondary-600 text-lg">
               Connect with opportunities that matter

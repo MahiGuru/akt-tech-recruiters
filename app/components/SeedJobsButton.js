@@ -236,8 +236,8 @@ export default function SeedJobsButton() {
       try {
         // Create employer
         const employerData = {
-          name: "AKT Talents Admin",
-          email: "admin@AKT Talents.com",
+          name: "At Bench Admin",
+          email: "admin@At Bench.com",
           password: "password123", 
           role: "EMPLOYER"
         }

@@ -5,7 +5,7 @@ import { Toaster } from 'react-hot-toast';
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'AKT Talents - Recruiting Platform',
+  title: 'At Bench - Recruiting Platform',
   description: 'Connect talented professionals with amazing opportunities',
 }
 

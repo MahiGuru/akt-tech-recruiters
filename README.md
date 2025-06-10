@@ -1,4 +1,4 @@
-# AKT Talents - Modern Recruiting Platform
+# At Bench - Modern Recruiting Platform
 
 A beautiful, modern recruiting platform built with Next.js, Tailwind CSS, and PostgreSQL.
 

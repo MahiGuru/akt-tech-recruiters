@@ -93,7 +93,7 @@ export default function Jobs() {
           <div className="flex justify-between items-center py-4">
             <Link href="/" className="flex items-center gap-2">
               <span className="text-2xl font-bold text-gray-900">
-                <Image src={"/logo.svg"} alt="AKT Talents Logo" width={'300'} height={'120'}/>
+                <Image src={"/logo.svg"} alt="At Bench Logo" width={'300'} height={'120'}/>
               </span>
             </Link>
             
