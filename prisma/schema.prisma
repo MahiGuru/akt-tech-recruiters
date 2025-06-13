@@ -75,10 +75,14 @@ model User {
   Resume       Resume[]
   
   // Recruiter relations
-  recruiterProfile    Recruiter?
-  managedRecruiters   Recruiter[]  @relation("AdminRecruiter")
-  sentNotifications   Notification[] @relation("NotificationSender")
+  recruiterProfile      Recruiter?
+  managedRecruiters     Recruiter[]  @relation("AdminRecruiter")
+  sentNotifications     Notification[] @relation("NotificationSender")
   receivedNotifications Notification[] @relation("NotificationReceiver")
+  
+  // NEW: Candidate management
+  addedCandidates       Candidate[] @relation("RecruiterAddedCandidate")
+  recruiterApplications Application[] @relation("RecruiterSubmittedApplication")
 
   @@map("users")
 }
@@ -98,6 +102,33 @@ model Recruiter {
   adminRecruiter User?         @relation("AdminRecruiter", fields: [adminId], references: [id])
   
   @@map("recruiters")
+}
+
+// NEW: Candidate model for recruiter-added candidates
+model Candidate {
+  id           String   @id @default(cuid())
+  name         String
+  email        String
+  phone        String?
+  location     String?
+  experience   Int?
+  skills       String[]
+  bio          String?
+  source       String?  // Where the candidate was found (LinkedIn, referral, etc.)
+  notes        String?  // Recruiter notes about the candidate
+  status       CandidateStatus @default(ACTIVE)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  addedById    String   // Recruiter who added this candidate
+  addedBy      User     @relation("RecruiterAddedCandidate", fields: [addedById], references: [id])
+  
+  resumes      Resume[]
+  applications Application[]
+  
+  @@unique([email, addedById]) // Prevent duplicate candidates by same recruiter
+  @@map("candidates")
 }
 
 model Notification {
@@ -151,10 +182,21 @@ model Application {
   // Relations
   jobId      String
   job        Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  employeeId String
-  employee   User   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@unique([jobId, employeeId])
+  
+  // UPDATED: Support both employee self-applications and recruiter applications
+  employeeId String?
+  employee   User?  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  // NEW: Candidate applications (recruiter-submitted)
+  candidateId String?
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  // NEW: Track who submitted the application (for recruiter applications)
+  submittedById String?
+  submittedBy   User?   @relation("RecruiterSubmittedApplication", fields: [submittedById], references: [id])
+  
+  @@unique([jobId, employeeId])     // Prevent duplicate employee applications
+  @@unique([jobId, candidateId])    // Prevent duplicate candidate applications
   @@map("applications")
 }
 
@@ -169,12 +211,18 @@ model Resume {
   description    String?         // Optional description
   experienceLevel ExperienceLevel // Categorization
   isActive       Boolean         @default(true)
-  isPrimary      Boolean         @default(false) // One primary per user
+  isPrimary      Boolean         @default(false) // One primary per user/candidate
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   
-  userId         String
-  user           User            @relation(fields: [userId], references: [id])
+  // UPDATED: Support both users and candidates
+  userId         String?
+  user           User?           @relation(fields: [userId], references: [id])
+  
+  candidateId    String?
+  candidate      Candidate?      @relation(fields: [candidateId], references: [id])
+  
+  @@map("resumes")
 }
 
 enum ExperienceLevel {
@@ -221,4 +269,12 @@ enum ApplicationStatus {
   REVIEWED
   ACCEPTED
   REJECTED
+}
+
+// NEW: Candidate status
+enum CandidateStatus {
+  ACTIVE
+  PLACED
+  INACTIVE
+  DO_NOT_CONTACT
 }

@@ -31,15 +31,17 @@ import {
   MessageSquare,
   Star,
   Plus,
-  Briefcase // Import Briefcase icon for Post Job button
+  Briefcase,
+  UserPlus // Import UserPlus icon for candidate management
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Link from 'next/link'
+import CandidateManagement from '../../components/CandidateManagement'
 
 export default function RecruiterDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState('resumes')
+  const [activeTab, setActiveTab] = useState('candidates') // Changed default to candidates
   const [resumes, setResumes] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -73,9 +75,7 @@ export default function RecruiterDashboard() {
     fetchDashboardData()
   }, [session, status, router])
 
-  // Replace the fetchDashboardData function in your recruiter dashboard with this:
-
-const fetchDashboardData = async () => {
+  const fetchDashboardData = async () => {
     try {
       setIsLoading(true)
       
@@ -83,7 +83,6 @@ const fetchDashboardData = async () => {
       const resumesResponse = await fetch('/api/recruiter/resumes')
       if (resumesResponse.ok) {
         const resumesData = await resumesResponse.json()
-        // Handle the new API response structure
         const resumesList = resumesData.resumes || resumesData
         setResumes(resumesList)
       } else {
@@ -96,11 +95,9 @@ const fetchDashboardData = async () => {
         const teamResponse = await fetch('/api/recruiter/team')
         if (teamResponse.ok) {
           const teamData = await teamResponse.json()
-          // Handle the new API response structure
           const teamList = teamData.teamMembers || teamData
           setTeamMembers(teamList)
           
-          // Update stats if available
           if (teamData.stats) {
             setStats(prevStats => ({
               ...prevStats,
@@ -109,7 +106,7 @@ const fetchDashboardData = async () => {
           }
         } else {
           console.error('Failed to fetch team:', teamResponse.status)
-          if (teamResponse.status !== 403) { // Don't show error for non-admin users
+          if (teamResponse.status !== 403) {
             toast.error('Failed to load team members')
           }
         }
@@ -119,11 +116,9 @@ const fetchDashboardData = async () => {
       const notificationsResponse = await fetch('/api/recruiter/notifications')
       if (notificationsResponse.ok) {
         const notificationsData = await notificationsResponse.json()
-        // Handle the new API response structure
         const notificationsList = notificationsData.notifications || notificationsData
         setNotifications(notificationsList)
         
-        // Update stats
         const unreadCount = notificationsData.pagination?.unread || 
                            notificationsList.filter(n => !n.isRead).length
         
@@ -136,15 +131,14 @@ const fetchDashboardData = async () => {
         toast.error('Failed to load notifications')
       }
   
-      // Calculate additional stats
       const resumeCount = resumes.length
       
       setStats(prevStats => ({
         ...prevStats,
         totalResumes: resumeCount,
-        newApplications: 12 // This would come from applications API when implemented
+        newApplications: 12
       }))
-  
+
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
       toast.error('Failed to load dashboard data')
@@ -154,78 +148,70 @@ const fetchDashboardData = async () => {
   }
 
   const sendNotificationToAdmin = async (message) => {
-  try {
-    const response = await fetch('/api/recruiter/notifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: 'Request from Team Member',
-        message,
-        type: 'APPROVAL_REQUEST'
-        // receiverId will be automatically set to admin if not provided
+    try {
+      const response = await fetch('/api/recruiter/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Request from Team Member',
+          message,
+          type: 'APPROVAL_REQUEST'
+        })
       })
-    })
 
-    if (response.ok) {
-      const result = await response.json()
-      toast.success('Notification sent to admin successfully!')
-      setShowNotificationModal(false)
-      
-      // Optionally refresh notifications
-      fetchDashboardData()
-    } else {
-      const error = await response.json()
-      throw new Error(error.message || 'Failed to send notification')
+      if (response.ok) {
+        const result = await response.json()
+        toast.success('Notification sent to admin successfully!')
+        setShowNotificationModal(false)
+        fetchDashboardData()
+      } else {
+        const error = await response.json()
+        throw new Error(error.message || 'Failed to send notification')
+      }
+    } catch (error) {
+      console.error('Failed to send notification:', error)
+      toast.error(error.message || 'Failed to send notification')
     }
-  } catch (error) {
-    console.error('Failed to send notification:', error)
-    toast.error(error.message || 'Failed to send notification')
   }
-}
 
-// Also add this function to mark notifications as read:
-const markNotificationAsRead = async (notificationId) => {
-  try {
-    const response = await fetch('/api/recruiter/notifications', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        notificationId,
-        isRead: true
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      const response = await fetch('/api/recruiter/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          notificationId,
+          isRead: true
+        })
       })
-    })
 
-    if (response.ok) {
-      // Update local state
-      setNotifications(prevNotifications => 
-        prevNotifications.map(notification => 
-          notification.id === notificationId 
-            ? { ...notification, isRead: true }
-            : notification
+      if (response.ok) {
+        setNotifications(prevNotifications => 
+          prevNotifications.map(notification => 
+            notification.id === notificationId 
+              ? { ...notification, isRead: true }
+              : notification
+          )
         )
-      )
-      
-      // Update unread count
-      setStats(prevStats => ({
-        ...prevStats,
-        unreadNotifications: Math.max(0, prevStats.unreadNotifications - 1)
-      }))
+        
+        setStats(prevStats => ({
+          ...prevStats,
+          unreadNotifications: Math.max(0, prevStats.unreadNotifications - 1)
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error)
     }
-  } catch (error) {
-    console.error('Failed to mark notification as read:', error)
   }
-}
 
-// And this function to mark all notifications as read:
-const markAllNotificationsAsRead = async () => {
+  const markAllNotificationsAsRead = async () => {
     try {
       const response = await fetch('/api/recruiter/notifications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' }
       })
-  
+
       if (response.ok) {
-        // Update local state
         setNotifications(prevNotifications => 
           prevNotifications.map(notification => ({ 
             ...notification, 
@@ -233,7 +219,6 @@ const markAllNotificationsAsRead = async () => {
           }))
         )
         
-        // Reset unread count
         setStats(prevStats => ({
           ...prevStats,
           unreadNotifications: 0
@@ -246,6 +231,7 @@ const markAllNotificationsAsRead = async () => {
       toast.error('Failed to update notifications')
     }
   }
+
   const handleLogout = async () => {
     await signOut({ callbackUrl: '/' })
   }
@@ -296,7 +282,6 @@ const markAllNotificationsAsRead = async () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
@@ -369,6 +354,19 @@ const markAllNotificationsAsRead = async () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
+              {/* NEW: Candidates Tab */}
+              <button
+                onClick={() => setActiveTab('candidates')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'candidates'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <UserPlus className="w-4 h-4 inline mr-2" />
+                Manage Candidates
+              </button>
+
               <button
                 onClick={() => setActiveTab('resumes')}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -416,6 +414,11 @@ const markAllNotificationsAsRead = async () => {
 
           {/* Tab Content */}
           <div className="p-6">
+            {/* NEW: Candidates Tab */}
+            {activeTab === 'candidates' && (
+              <CandidateManagement />
+            )}
+
             {/* Resumes Tab */}
             {activeTab === 'resumes' && (
               <div className="space-y-6">
