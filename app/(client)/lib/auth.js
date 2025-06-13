@@ -50,7 +50,7 @@ export const authOptions = {
         }
 
         try {
-          // Find user in database
+          // Find user in database with recruiter profile
           const user = await prisma.user.findUnique({
             where: { email: credentials.email },
             select: {
@@ -67,6 +67,15 @@ export const authOptions = {
               resumeUrl: true,
               bio: true,
               createdAt: true,
+              recruiterProfile: {
+                select: {
+                  id: true,
+                  recruiterType: true,
+                  department: true,
+                  isActive: true,
+                  adminId: true
+                }
+              }
             },
           })
 
@@ -98,6 +107,11 @@ export const authOptions = {
         token.role = user.role
         token.id = user.id
         token.provider = account?.provider || 'credentials'
+        
+        // Add recruiter profile info to token
+        if (user.role === 'RECRUITER' && user.recruiterProfile) {
+          token.recruiterProfile = user.recruiterProfile
+        }
       }
       return token
     },
@@ -106,6 +120,11 @@ export const authOptions = {
         session.user.id = token.id
         session.user.role = token.role
         session.user.provider = token.provider
+        
+        // Add recruiter profile to session
+        if (token.recruiterProfile) {
+          session.user.recruiterProfile = token.recruiterProfile
+        }
       }
       return session
     },
@@ -115,7 +134,8 @@ export const authOptions = {
         try {
           // Check if user exists
           const existingUser = await prisma.user.findUnique({
-            where: { email: user.email }
+            where: { email: user.email },
+            include: { recruiterProfile: true }
           })
           
           // If user doesn't exist, we'll create them with default role

@@ -11,7 +11,8 @@ import {
   ArrowRight,
   CheckCircle,
   Users,
-  Briefcase
+  Briefcase,
+  UserCheck
 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -27,9 +28,11 @@ export default function RoleSelection() {
     }
     
     // If user already has a role, redirect to dashboard
-    if (session?.user?.role && session.user.role !== 'EMPLOYEE') {
+    if (session?.user?.role) {
       if (session.user.role === 'EMPLOYER') {
         router.push('/dashboard/employer')
+      } else if (session.user.role === 'RECRUITER') {
+        router.push('/dashboard/recruiter')
       } else {
         router.push('/dashboard/employee')
       }
@@ -62,6 +65,8 @@ export default function RoleSelection() {
         // Redirect based on role
         if (selectedRole === 'EMPLOYER') {
           router.push('/dashboard/employer')
+        } else if (selectedRole === 'RECRUITER') {
+          router.push('/dashboard/recruiter')
         } else {
           router.push('/dashboard/employee')
         }
@@ -92,6 +97,14 @@ export default function RoleSelection() {
       icon: Building,
       gradient: 'from-purple-500 to-pink-500',
       benefits: ['Post unlimited jobs', 'Access talent pool', 'Manage applications', 'Build your team']
+    },
+    {
+      value: 'RECRUITER',
+      title: 'Recruiter',
+      description: 'Connect talent with opportunities',
+      icon: UserCheck,
+      gradient: 'from-green-500 to-teal-500',
+      benefits: ['Access all resumes', 'Manage candidates', 'Collaborate with teams', 'Track recruiting metrics']
     }
   ]
 
@@ -119,7 +132,7 @@ export default function RoleSelection() {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
-        className="relative max-w-2xl w-full space-y-8"
+        className="relative max-w-3xl w-full space-y-8"
       >
         {/* Header */}
         <div className="text-center">
@@ -136,7 +149,7 @@ export default function RoleSelection() {
               Welcome {session.user.name}!
             </h1>
             <p className="text-secondary-600 text-lg">
-              Let&apos;s set up your account. Are you looking for a job or looking to hire?
+              Let&apos;s set up your account. Choose your role to get started.
             </p>
           </motion.div>
         </div>
@@ -147,7 +160,7 @@ export default function RoleSelection() {
             <legend className="form-label mb-6 text-center text-lg font-semibold">
               Choose your path
             </legend>
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {roleOptions.map((option) => (
                 <button
                   key={option.value}
@@ -160,17 +173,17 @@ export default function RoleSelection() {
                   }`}
                   aria-pressed={selectedRole === option.value}
                 >
-                  <div className="flex items-start gap-4">
-                    <div className={`w-16 h-16 rounded-xl bg-gradient-to-r ${option.gradient} flex items-center justify-center shadow-lg`}>
+                  <div className="flex flex-col items-center text-center">
+                    <div className={`w-16 h-16 rounded-xl bg-gradient-to-r ${option.gradient} flex items-center justify-center shadow-lg mb-4`}>
                       <option.icon className="w-8 h-8 text-white" />
                     </div>
                     <div className="flex-1">
                       <h3 className="font-bold text-secondary-900 mb-2 text-xl">{option.title}</h3>
                       <p className="text-secondary-600 mb-4">{option.description}</p>
-                      <ul className="space-y-2">
+                      <ul className="space-y-2 text-left">
                         {option.benefits.map((benefit, idx) => (
                           <li key={idx} className="flex items-center gap-2 text-sm text-secondary-600">
-                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
                             {benefit}
                           </li>
                         ))}
@@ -180,7 +193,7 @@ export default function RoleSelection() {
                       <motion.div
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
-                        className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center"
+                        className="absolute top-4 right-4 w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center"
                       >
                         <CheckCircle className="w-5 h-5 text-white" />
                       </motion.div>

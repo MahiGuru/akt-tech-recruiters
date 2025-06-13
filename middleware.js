@@ -19,11 +19,28 @@ export default withAuth(
 
       // Role-based dashboard access
       if (pathname.startsWith('/dashboard/employee') && token.role !== 'EMPLOYEE') {
-        return NextResponse.redirect(new URL('/dashboard/employer', req.url))
+        const redirectUrl = token.role === 'EMPLOYER' ? '/dashboard/employer' : '/dashboard/recruiter'
+        return NextResponse.redirect(new URL(redirectUrl, req.url))
       }
 
       if (pathname.startsWith('/dashboard/employer') && token.role !== 'EMPLOYER') {
-        return NextResponse.redirect(new URL('/dashboard/employee', req.url))
+        const redirectUrl = token.role === 'EMPLOYEE' ? '/dashboard/employee' : '/dashboard/recruiter'
+        return NextResponse.redirect(new URL(redirectUrl, req.url))
+      }
+
+      if (pathname.startsWith('/dashboard/recruiter') && token.role !== 'RECRUITER') {
+        const redirectUrl = token.role === 'EMPLOYEE' ? '/dashboard/employee' : '/dashboard/employer'
+        return NextResponse.redirect(new URL(redirectUrl, req.url))
+      }
+    }
+
+    // Handle recruiter-specific routes
+    if (pathname.startsWith('/api/recruiter')) {
+      if (!token || token.role !== 'RECRUITER') {
+        return NextResponse.json(
+          { message: 'Access denied. Recruiter role required.' },
+          { status: 403 }
+        )
       }
     }
 
@@ -33,9 +50,13 @@ export default withAuth(
         return NextResponse.redirect(new URL('/auth/role-selection', req.url))
       }
       
-      const dashboardUrl = token.role === 'EMPLOYER' 
-        ? '/dashboard/employer' 
-        : '/dashboard/employee'
+      let dashboardUrl = '/dashboard/employee'
+      if (token.role === 'EMPLOYER') {
+        dashboardUrl = '/dashboard/employer'
+      } else if (token.role === 'RECRUITER') {
+        dashboardUrl = '/dashboard/recruiter'
+      }
+      
       return NextResponse.redirect(new URL(dashboardUrl, req.url))
     }
 
@@ -45,10 +66,20 @@ export default withAuth(
         return NextResponse.redirect(new URL('/auth/login', req.url))
       }
       if (token.role) {
-        const dashboardUrl = token.role === 'EMPLOYER' 
-          ? '/dashboard/employer' 
-          : '/dashboard/employee'
+        let dashboardUrl = '/dashboard/employee'
+        if (token.role === 'EMPLOYER') {
+          dashboardUrl = '/dashboard/employer'
+        } else if (token.role === 'RECRUITER') {
+          dashboardUrl = '/dashboard/recruiter'
+        }
         return NextResponse.redirect(new URL(dashboardUrl, req.url))
+      }
+    }
+
+    // Protect post-job route (employers only)
+    if (pathname.startsWith('/post-job')) {
+      if (!token || token.role !== 'EMPLOYER') {
+        return NextResponse.redirect(new URL('/', req.url))
       }
     }
 
@@ -64,10 +95,11 @@ export default withAuth(
           pathname === '/' ||
           pathname.startsWith('/jobs') ||
           pathname.startsWith('/auth/login') ||
+          pathname.startsWith('/auth/register') ||
           pathname.startsWith('/api/auth') ||
           pathname.startsWith('/_next') ||
           pathname.startsWith('/favicon') ||
-          pathname.includes('/api/jobs') && req.method === 'GET' // Public job listings
+          (pathname.includes('/api/jobs') && req.method === 'GET') // Public job listings
         ) {
           return true
         }
@@ -76,7 +108,8 @@ export default withAuth(
         if (
           pathname.startsWith('/dashboard') ||
           pathname.startsWith('/post-job') ||
-          pathname === '/auth/role-selection'
+          pathname === '/auth/role-selection' ||
+          pathname.startsWith('/api/recruiter')
         ) {
           return !!token
         }

@@ -26,7 +26,7 @@ export async function POST(request) {
     }
 
     // Validate role
-    if (!['EMPLOYEE', 'EMPLOYER'].includes(role)) {
+    if (!['EMPLOYEE', 'EMPLOYER', 'RECRUITER'].includes(role)) {
       return NextResponse.json(
         { message: 'Invalid role' },
         { status: 400 }
@@ -34,16 +34,43 @@ export async function POST(request) {
     }
 
     // Update user role
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        image: true
+    // Update user role in a transaction to handle recruiter profile creation
+    const result = await prisma.$transaction(async (tx) => {
+      // Update user role
+      const updatedUser = await tx.user.update({
+        where: { id: userId },
+        data: { role },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          image: true
+        }
+      })
+
+      // Create recruiter profile if role is RECRUITER
+      if (role === 'RECRUITER') {
+        const recruiterProfile = await tx.recruiter.create({
+          data: {
+            userId: userId,
+            recruiterType: 'TA', // Default to Technical Analyst
+            isActive: true,
+          },
+        })
+
+        return {
+          ...updatedUser,
+          recruiterProfile: {
+            id: recruiterProfile.id,
+            recruiterType: recruiterProfile.recruiterType,
+            department: recruiterProfile.department,
+            isActive: recruiterProfile.isActive
+          }
+        }
       }
+
+      return updatedUser
     })
 
     return NextResponse.json({

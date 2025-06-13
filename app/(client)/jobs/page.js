@@ -97,6 +97,8 @@ export default function Jobs() {
   const handleDashboardRedirect = () => {
     if (session?.user?.role === 'EMPLOYER') {
       router.push('/dashboard/employer');
+    } else if (session?.user?.role === 'RECRUITER') {
+      router.push('/dashboard/recruiter');
     } else {
       router.push('/dashboard/employee');
     }

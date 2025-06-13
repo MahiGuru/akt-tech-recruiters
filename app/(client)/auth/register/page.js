@@ -24,15 +24,11 @@ import {
   IndianRupeeIcon,
   Clock,
   Globe,
-  Briefcase
+  Briefcase,
+  UserCheck,
+  Shield
 } from 'lucide-react'
 
-
-/**
- * Register page with Suspence
- * As we are using useSerchParams()
- * @returns  - RegisterPage.
- */
 export default function Register() {
   return (
     <Suspense fallback={<div>Loading...</div>}>
@@ -41,29 +37,32 @@ export default function Register() {
   )
 }
 
-
-/***
- * Register page
- */
 function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [role, setRole] = useState(searchParams.get('role') || 'EMPLOYEE')
+  const [recruiterType, setRecruiterType] = useState('TA')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
   const { register, handleSubmit, formState: { errors }, watch, trigger } = useForm()
 
   const password = watch('password')
-  const totalSteps = role === 'EMPLOYER' ? 3 : 2
+  const totalSteps = role === 'EMPLOYER' ? 3 : role === 'RECRUITER' ? 3 : 2
 
   const onSubmit = async (data) => {
     setIsLoading(true)
     try {
+      const submitData = { 
+        ...data, 
+        role,
+        ...(role === 'RECRUITER' && { recruiterType })
+      }
+
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, role })
+        body: JSON.stringify(submitData)
       })
 
       if (response.ok) {
@@ -89,6 +88,8 @@ function RegisterPage() {
       fieldsToValidate = ['phone', 'location']
     } else if (currentStep === 2 && role === 'EMPLOYER') {
       fieldsToValidate = ['phone', 'companyName', 'companySize', 'industry']
+    } else if (currentStep === 2 && role === 'RECRUITER') {
+      fieldsToValidate = ['phone', 'department']
     }
 
     const isValid = await trigger(fieldsToValidate)
@@ -119,7 +120,24 @@ function RegisterPage() {
       icon: Building,
       gradient: 'from-purple-500 to-pink-500',
       benefits: ['Post unlimited jobs', 'Access talent pool', 'Manage applications', 'Build your team']
+    },
+    {
+      value: 'RECRUITER',
+      title: 'Recruiter',
+      description: 'Connect talent with opportunities',
+      icon: UserCheck,
+      gradient: 'from-green-500 to-teal-500',
+      benefits: ['Access all resumes', 'Manage candidates', 'Collaborate with teams', 'Track recruiting metrics']
     }
+  ]
+
+  const recruiterTypeOptions = [
+    { value: 'ADMIN', label: 'Admin Recruiter', description: 'Full access and team management' },
+    { value: 'TA', label: 'Technical Analyst', description: 'Technical screening and assessment' },
+    { value: 'HR', label: 'Human Resources', description: 'HR processes and compliance' },
+    { value: 'CS', label: 'Customer Success', description: 'Client relationship management' },
+    { value: 'LEAD', label: 'Lead Recruiter', description: 'Team leadership and strategy' },
+    { value: 'JUNIOR', label: 'Junior Recruiter', description: 'Entry-level recruiting role' }
   ]
 
   const getPasswordStrength = () => {
@@ -161,24 +179,7 @@ function RegisterPage() {
           transition={{ duration: 0.8 }}
           className="relative max-w-lg w-full space-y-8"
         >
-          {/* Header */}
-          <div className="text-center">
-
-            {/* <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <h1 className="text-3xl font-bold text-secondary-900 mb-3">
-                Join At Bench Today
-              </h1>
-              <p className="text-secondary-600 text-lg">
-                Connect with opportunities that matter
-              </p>
-            </motion.div> */}
-          </div>
-
-          {/* Enhanced Progress Indicator */}
+          {/* Progress Indicator */}
           <div className="flex justify-center mb-8">
             <div className="flex items-center space-x-2">
               {Array.from({ length: totalSteps }, (_, index) => {
@@ -229,9 +230,6 @@ function RegisterPage() {
               >
                 {/* Role Selection */}
                 <fieldset className="mb-8">
-                  {/* <legend className="form-label mb-6 text-center text-lg font-semibold">
-                    Choose your path
-                  </legend> */}
                   <div className="grid grid-cols-1 gap-4">
                     {roleOptions.map((option) => (
                       <button
@@ -290,15 +288,14 @@ function RegisterPage() {
                         })}
                         className={`input-field transition-all duration-200 ${errors.name ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
                         placeholder="Enter your full name"
-                        aria-describedby={errors.name ? 'name-error' : undefined}
+                        disabled={isLoading}
                       />
-                      <User className="input-icon text-secondary-400" aria-hidden="true" />
+                      <User className="input-icon text-secondary-400" />
                     </div>
                     {errors.name && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        id="name-error"
                         className="form-error"
                         role="alert"
                       >
@@ -324,15 +321,14 @@ function RegisterPage() {
                         })}
                         className={`input-field transition-all duration-200 ${errors.email ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
                         placeholder="Enter your email address"
-                        aria-describedby={errors.email ? 'email-error' : undefined}
+                        disabled={isLoading}
                       />
-                      <Mail className="input-icon text-secondary-400" aria-hidden="true" />
+                      <Mail className="input-icon text-secondary-400" />
                     </div>
                     {errors.email && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        id="email-error"
                         className="form-error"
                         role="alert"
                       >
@@ -353,7 +349,7 @@ function RegisterPage() {
               </motion.div>
             )}
 
-            {/* Step 2: Contact & Company Details */}
+            {/* Step 2: Contact & Role-specific Details */}
             {currentStep === 2 && (
               <motion.div
                 key="step2"
@@ -365,17 +361,18 @@ function RegisterPage() {
                 <div className="space-y-6">
                   <div className="text-center mb-6">
                     <h3 className="text-lg font-semibold text-secondary-900">
-                      {role === 'EMPLOYEE' ? 'Contact Information' : 'Company Details'}
+                      {role === 'EMPLOYEE' ? 'Contact Information' : 
+                       role === 'EMPLOYER' ? 'Company Details' : 
+                       'Recruiter Details'}
                     </h3>
                     <p className="text-secondary-600">
-                      {role === 'EMPLOYEE'
-                        ? 'Help us personalize your experience'
-                        : 'Tell us about your company'
-                      }
+                      {role === 'EMPLOYEE' ? 'Help us personalize your experience' : 
+                       role === 'EMPLOYER' ? 'Tell us about your company' : 
+                       'Set up your recruiter profile'}
                     </p>
                   </div>
 
-                  {/* Phone Number (Both roles) */}
+                  {/* Phone Number (All roles) */}
                   <div className="form-group">
                     <label htmlFor="phone" className="form-label required text-secondary-800">
                       Phone Number
@@ -387,8 +384,9 @@ function RegisterPage() {
                         {...register('phone', { required: 'Phone number is required' })}
                         className={`input-field transition-all duration-200 ${errors.phone ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
                         placeholder="Enter your phone number"
+                        disabled={isLoading}
                       />
-                      <Phone className="input-icon text-secondary-400" aria-hidden="true" />
+                      <Phone className="input-icon text-secondary-400" />
                     </div>
                     {errors.phone && (
                       <motion.div
@@ -414,11 +412,12 @@ function RegisterPage() {
                           {...register('location')}
                           className="input-field focus:border-primary-400 focus:bg-white transition-all duration-200"
                           placeholder="Enter your city, state"
+                          disabled={isLoading}
                         />
-                        <MapPin className="input-icon text-secondary-400" aria-hidden="true" />
+                        <MapPin className="input-icon text-secondary-400" />
                       </div>
                     </div>
-                  ) : (
+                  ) : role === 'EMPLOYER' ? (
                     /* Employer Fields */
                     <>
                       <div className="form-group">
@@ -431,8 +430,9 @@ function RegisterPage() {
                             {...register('companyName', { required: 'Company name is required' })}
                             className={`input-field transition-all duration-200 ${errors.companyName ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
                             placeholder="Enter your company name"
+                            disabled={isLoading}
                           />
-                          <Building className="input-icon text-secondary-400" aria-hidden="true" />
+                          <Building className="input-icon text-secondary-400" />
                         </div>
                         {errors.companyName && (
                           <motion.div
@@ -455,6 +455,7 @@ function RegisterPage() {
                             id="companySize"
                             {...register('companySize', { required: 'Company size is required' })}
                             className={`input-field transition-all duration-200 ${errors.companySize ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
+                            disabled={isLoading}
                           >
                             <option value="">Select size</option>
                             <option value="1-10">1-10 employees</option>
@@ -483,6 +484,7 @@ function RegisterPage() {
                             id="industry"
                             {...register('industry', { required: 'Industry is required' })}
                             className={`input-field transition-all duration-200 ${errors.industry ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
+                            disabled={isLoading}
                           >
                             <option value="">Select industry</option>
                             <option value="technology">Technology</option>
@@ -507,10 +509,69 @@ function RegisterPage() {
                         </div>
                       </div>
                     </>
+                  ) : (
+                    /* Recruiter Fields */
+                    <>
+                      <div className="form-group">
+                        <label className="form-label required text-secondary-800">
+                          Recruiter Type
+                        </label>
+                        <div className="grid grid-cols-1 gap-3">
+                          {recruiterTypeOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => setRecruiterType(option.value)}
+                              className={`p-4 border-2 rounded-lg transition-all duration-200 text-left ${
+                                recruiterType === option.value
+                                  ? 'border-primary-500 bg-primary-50'
+                                  : 'border-secondary-200 hover:border-primary-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                  option.value === 'ADMIN' ? 'bg-red-100 text-red-600' :
+                                  option.value === 'TA' ? 'bg-blue-100 text-blue-600' :
+                                  option.value === 'HR' ? 'bg-green-100 text-green-600' :
+                                  option.value === 'CS' ? 'bg-purple-100 text-purple-600' :
+                                  option.value === 'LEAD' ? 'bg-orange-100 text-orange-600' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {option.value === 'ADMIN' ? <Shield className="w-4 h-4" /> :
+                                   <UserCheck className="w-4 h-4" />}
+                                </div>
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-secondary-900">{option.label}</h4>
+                                  <p className="text-sm text-secondary-600">{option.description}</p>
+                                </div>
+                                {recruiterType === option.value && (
+                                  <CheckCircle className="w-5 h-5 text-primary-600" />
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label htmlFor="department" className="form-label text-secondary-800">
+                          Department
+                        </label>
+                        <div className="input-with-icon">
+                          <input
+                            id="department"
+                            {...register('department')}
+                            className="input-field focus:border-primary-400 focus:bg-white transition-all duration-200"
+                            placeholder="e.g., Engineering, Sales, Marketing"
+                            disabled={isLoading}
+                          />
+                          <Briefcase className="input-icon text-secondary-400" />
+                        </div>
+                      </div>
+                    </>
                   )}
 
                   {/* Navigation Buttons */}
-                  {((role === 'EMPLOYER' && currentStep === 2)) ? (
                   <div className="flex gap-3 pt-6">
                     <button
                       type="button"
@@ -528,13 +589,13 @@ function RegisterPage() {
                       Continue
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </button>
-                  </div>) : null }
-                </div> 
+                  </div>
+                </div>
               </motion.div>
             )}
 
-            {/* Step 3: Password & Final Details (Employer) or Step 2 (Employee) */}
-            {((role === 'EMPLOYER' && currentStep === 3) || (role === 'EMPLOYEE' && currentStep === 2)) && (
+            {/* Step 3: Password & Final Details */}
+            {currentStep === totalSteps && (
               <motion.div
                 key="final-step"
                 initial={{ opacity: 0, x: 50 }}
@@ -545,14 +606,10 @@ function RegisterPage() {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                   <div className="text-center mb-6">
                     <h3 className="text-lg font-semibold text-secondary-900">
-                      {role === 'EMPLOYER' ? 'Hiring Preferences & Security' : ''}
+                      {role === 'EMPLOYER' ? 'Hiring Preferences & Security' : 
+                       role === 'RECRUITER' ? 'Complete Your Profile' : 
+                       'Create Your Account'}
                     </h3>
-                    <p className="text-secondary-600">
-                      {role === 'EMPLOYER'
-                        ? 'Help us match you with the right candidates'
-                        : ''
-                      }
-                    </p>
                   </div>
 
                   {/* Employer-specific final fields */}
@@ -568,6 +625,7 @@ function RegisterPage() {
                               id="urgency"
                               {...register('urgency')}
                               className="input-field focus:border-primary-400 focus:bg-white transition-all duration-200"
+                              disabled={isLoading}
                             >
                               <option value="">Select urgency</option>
                               <option value="immediate">Immediate (1-2 weeks)</option>
@@ -575,7 +633,7 @@ function RegisterPage() {
                               <option value="flexible">Flexible (2-3 months)</option>
                               <option value="planning">Just planning</option>
                             </select>
-                            <Clock className="input-icon text-secondary-400" aria-hidden="true" />
+                            <Clock className="input-icon text-secondary-400" />
                           </div>
                         </div>
 
@@ -588,6 +646,7 @@ function RegisterPage() {
                               id="budgetRange"
                               {...register('budgetRange')}
                               className="input-field focus:border-primary-400 focus:bg-white transition-all duration-200"
+                              disabled={isLoading}
                             >
                               <option value="">Select range</option>
                               <option value="under-50k">Under $50K</option>
@@ -596,7 +655,7 @@ function RegisterPage() {
                               <option value="150k-200k">$150K - $200K</option>
                               <option value="200k+">$200K+</option>
                             </select>
-                            <IndianRupeeIcon className="input-icon text-secondary-400" aria-hidden="true" />
+                            <IndianRupeeIcon className="input-icon text-secondary-400" />
                           </div>
                         </div>
                       </div>
@@ -611,8 +670,9 @@ function RegisterPage() {
                             {...register('companyLocation')}
                             className="input-field focus:border-primary-400 focus:bg-white transition-all duration-200"
                             placeholder="City, State or Remote"
+                            disabled={isLoading}
                           />
-                          <Globe className="input-icon text-secondary-400" aria-hidden="true" />
+                          <Globe className="input-icon text-secondary-400" />
                         </div>
                       </div>
                     </>
@@ -636,14 +696,14 @@ function RegisterPage() {
                         })}
                         className={`input-field pr-12 transition-all duration-200 ${errors.password ? 'border-red-400 bg-red-50' : 'focus:border-primary-400 focus:bg-white'}`}
                         placeholder="Create a secure password"
-                        aria-describedby={errors.password ? 'password-error' : 'password-help'}
+                        disabled={isLoading}
                       />
-                      <Lock className="input-icon text-secondary-400" aria-hidden="true" />
+                      <Lock className="input-icon text-secondary-400" />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="show-password-icon absolute text-secondary-400 hover:text-secondary-600 transition-colors"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        disabled={isLoading}
                       >
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -675,14 +735,13 @@ function RegisterPage() {
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        id="password-error"
                         className="form-error"
                         role="alert"
                       >
                         {errors.password.message}
                       </motion.div>
                     ) : (
-                      <div id="password-help" className="text-xs text-secondary-500 mt-1">
+                      <div className="text-xs text-secondary-500 mt-1">
                         Use at least 6 characters with a mix of letters and numbers
                       </div>
                     )}
@@ -705,7 +764,7 @@ function RegisterPage() {
                     >
                       {isLoading ? (
                         <>
-                          <div className="loading-spinner mr-2" aria-hidden="true" />
+                          <div className="loading-spinner mr-2" />
                           Creating Account...
                         </>
                       ) : (
@@ -739,22 +798,6 @@ function RegisterPage() {
               </p>
             </div>
           </div>
-
-          {/* Trust Indicators */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="text-center"
-          >
-            <p className="text-sm text-secondary-500 mb-4">Trusted by 50,000+ professionals</p>
-            <div className="flex justify-center items-center gap-6 opacity-60">
-              <div className="text-xs text-secondary-400">🔒 Find</div>
-              <div className="text-xs text-secondary-400">⚡ Post</div>
-              <div className="text-xs text-secondary-400">✨ Apply</div>
-              <div className="text-xs text-secondary-400">✨ Success</div>
-            </div>
-          </motion.div>
         </motion.div>
       </div>
     </Suspense>
