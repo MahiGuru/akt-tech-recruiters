@@ -1,3 +1,5 @@
+'use server'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeResumeMatch } from '../../../(client)/lib/openai';
 import { extractTextFromFile, getAllResumeFiles } from '../../../(client)/lib/fileProcessor';

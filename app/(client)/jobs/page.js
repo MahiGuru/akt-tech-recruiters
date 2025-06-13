@@ -272,7 +272,7 @@ export default function Jobs() {
          * Seed Jobs Button
          * For dummy jobs for testing enable this button
          */}
-        {/* <SeedJobsButton /> */}
+        <SeedJobsButton />
 
         {/* Header */}
         <div className="mb-8">

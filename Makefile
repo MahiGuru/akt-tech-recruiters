@@ -102,7 +102,7 @@ prod-logs:
 migrate:
 	@echo "$(GREEN)Running database migrations...$(NC)"
 	sleep 10  # Wait for database to be ready
-	docker-compose -f $(COMPOSE_FILE_DEV) exec app npx prisma migrate deploy
+	docker-compose -f $(COMPOSE_FILE_DEV) exec app npx prisma db push
 	@echo "$(GREEN)✅ Database migrations completed!$(NC)"
 
 # Run database migrations (production)
@@ -188,7 +188,7 @@ setup:
 		exit 1; \
 	fi
 	@make dev-build
-	@make seed
+	@make migrate
 	@echo "$(GREEN)🎉 Setup completed! Application is running at http://localhost:3000$(NC)"
 
 # Install dependencies and setup environment

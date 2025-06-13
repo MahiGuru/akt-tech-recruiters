@@ -2,7 +2,6 @@
 const nextConfig = {
     // Enable standalone output for Docker
     output: 'standalone',
-
     // Image optimization
     images: {
         domains: [
