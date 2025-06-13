@@ -71,7 +71,9 @@ export default function RecruiterDashboard() {
     fetchDashboardData()
   }, [session, status, router])
 
-  const fetchDashboardData = async () => {
+  // Replace the fetchDashboardData function in your recruiter dashboard with this:
+
+const fetchDashboardData = async () => {
     try {
       setIsLoading(true)
       
@@ -79,36 +81,68 @@ export default function RecruiterDashboard() {
       const resumesResponse = await fetch('/api/recruiter/resumes')
       if (resumesResponse.ok) {
         const resumesData = await resumesResponse.json()
-        setResumes(resumesData)
+        // Handle the new API response structure
+        const resumesList = resumesData.resumes || resumesData
+        setResumes(resumesList)
+      } else {
+        console.error('Failed to fetch resumes:', resumesResponse.status)
+        toast.error('Failed to load resumes')
       }
-
+  
       // Fetch team members (if admin)
       if (isAdmin) {
         const teamResponse = await fetch('/api/recruiter/team')
         if (teamResponse.ok) {
           const teamData = await teamResponse.json()
-          setTeamMembers(teamData)
+          // Handle the new API response structure
+          const teamList = teamData.teamMembers || teamData
+          setTeamMembers(teamList)
+          
+          // Update stats if available
+          if (teamData.stats) {
+            setStats(prevStats => ({
+              ...prevStats,
+              teamSize: teamData.stats.total || teamList.length
+            }))
+          }
+        } else {
+          console.error('Failed to fetch team:', teamResponse.status)
+          if (teamResponse.status !== 403) { // Don't show error for non-admin users
+            toast.error('Failed to load team members')
+          }
         }
       }
-
+  
       // Fetch notifications
       const notificationsResponse = await fetch('/api/recruiter/notifications')
       if (notificationsResponse.ok) {
         const notificationsData = await notificationsResponse.json()
-        setNotifications(notificationsData)
+        // Handle the new API response structure
+        const notificationsList = notificationsData.notifications || notificationsData
+        setNotifications(notificationsList)
+        
+        // Update stats
+        const unreadCount = notificationsData.pagination?.unread || 
+                           notificationsList.filter(n => !n.isRead).length
+        
+        setStats(prevStats => ({
+          ...prevStats,
+          unreadNotifications: unreadCount
+        }))
+      } else {
+        console.error('Failed to fetch notifications:', notificationsResponse.status)
+        toast.error('Failed to load notifications')
       }
-
-      // Calculate stats
+  
+      // Calculate additional stats
       const resumeCount = resumes.length
-      const unreadCount = notifications.filter(n => !n.isRead).length
       
-      setStats({
+      setStats(prevStats => ({
+        ...prevStats,
         totalResumes: resumeCount,
-        newApplications: 12, // This would come from applications API
-        teamSize: teamMembers.length,
-        unreadNotifications: unreadCount
-      })
-
+        newApplications: 12 // This would come from applications API when implemented
+      }))
+  
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
       toast.error('Failed to load dashboard data')
@@ -118,28 +152,98 @@ export default function RecruiterDashboard() {
   }
 
   const sendNotificationToAdmin = async (message) => {
+  try {
+    const response = await fetch('/api/recruiter/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Request from Team Member',
+        message,
+        type: 'APPROVAL_REQUEST'
+        // receiverId will be automatically set to admin if not provided
+      })
+    })
+
+    if (response.ok) {
+      const result = await response.json()
+      toast.success('Notification sent to admin successfully!')
+      setShowNotificationModal(false)
+      
+      // Optionally refresh notifications
+      fetchDashboardData()
+    } else {
+      const error = await response.json()
+      throw new Error(error.message || 'Failed to send notification')
+    }
+  } catch (error) {
+    console.error('Failed to send notification:', error)
+    toast.error(error.message || 'Failed to send notification')
+  }
+}
+
+// Also add this function to mark notifications as read:
+const markNotificationAsRead = async (notificationId) => {
+  try {
+    const response = await fetch('/api/recruiter/notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        notificationId,
+        isRead: true
+      })
+    })
+
+    if (response.ok) {
+      // Update local state
+      setNotifications(prevNotifications => 
+        prevNotifications.map(notification => 
+          notification.id === notificationId 
+            ? { ...notification, isRead: true }
+            : notification
+        )
+      )
+      
+      // Update unread count
+      setStats(prevStats => ({
+        ...prevStats,
+        unreadNotifications: Math.max(0, prevStats.unreadNotifications - 1)
+      }))
+    }
+  } catch (error) {
+    console.error('Failed to mark notification as read:', error)
+  }
+}
+
+// And this function to mark all notifications as read:
+const markAllNotificationsAsRead = async () => {
     try {
       const response = await fetch('/api/recruiter/notifications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'Request from Team Member',
-          message,
-          type: 'APPROVAL_REQUEST'
-        })
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
       })
-
+  
       if (response.ok) {
-        toast.success('Notification sent to admin successfully!')
-        setShowNotificationModal(false)
-      } else {
-        throw new Error('Failed to send notification')
+        // Update local state
+        setNotifications(prevNotifications => 
+          prevNotifications.map(notification => ({ 
+            ...notification, 
+            isRead: true 
+          }))
+        )
+        
+        // Reset unread count
+        setStats(prevStats => ({
+          ...prevStats,
+          unreadNotifications: 0
+        }))
+        
+        toast.success('All notifications marked as read')
       }
     } catch (error) {
-      toast.error('Failed to send notification')
+      console.error('Failed to mark all notifications as read:', error)
+      toast.error('Failed to update notifications')
     }
   }
-
   const handleLogout = async () => {
     await signOut({ callbackUrl: '/' })
   }
@@ -190,55 +294,7 @@ export default function RecruiterDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-500 rounded-xl flex items-center justify-center">
-                <UserCheck className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">At Bench</span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Notifications */}
-              <div className="relative">
-                <button className="p-2 text-gray-400 hover:text-gray-600 relative">
-                  <Bell className="w-6 h-6" />
-                  {stats.unreadNotifications > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {stats.unreadNotifications}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* User Info */}
-              <div className="flex items-center gap-3">
-                {user.image && (
-                  <img 
-                    src={user.image} 
-                    alt={user.name} 
-                    className="w-8 h-8 rounded-full"
-                  />
-                )}
-                <div className="hidden sm:block">
-                  <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                  <p className="text-xs text-gray-500">
-                    {getRecruiterTypeLabel(user.recruiterProfile?.recruiterType)}
-                  </p>
-                </div>
-              </div>
-
-              <button onClick={handleLogout} className="btn btn-secondary btn-sm">
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Navigation */} 
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}

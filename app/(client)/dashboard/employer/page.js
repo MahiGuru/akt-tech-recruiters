@@ -87,36 +87,7 @@ export default function EmployerDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
-                <Building className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-gray-900">At Bench</span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                {user.image && (
-                  <img 
-                    src={user.image} 
-                    alt={user.name} 
-                    className="w-8 h-8 rounded-full"
-                  />
-                )}
-                <span className="text-gray-600">Welcome, {user.name}</span>
-              </div>
-              <button onClick={handleLogout} className="btn-secondary">
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+      
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">

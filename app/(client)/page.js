@@ -13,48 +13,10 @@ import {
   MapPin,
   Building
 } from 'lucide-react'
-import Image from 'next/image'
 
 export default function Home() {
   return (
     <div className="min-h-screen">
-      {/* Navigation */}
-      <nav className="bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-2">
-              {/* <div className="w-10 h-10 gradient-bg rounded-xl flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-white" />
-              </div> */}
-              <span className="text-2xl font-bold text-gray-900">
-                <Image src={"/logo.svg"} alt="At Bench Logo" width={'300'} height={'120'}/>
-              </span>
-            </div>
-            
-            <div className="hidden md:flex items-center gap-8">
-              <Link href="/jobs" className="text-gray-600 hover:text-gray-900 transition-colors">
-                Browse Jobs
-              </Link>
-              <Link href="/about" className="text-gray-600 hover:text-gray-900 transition-colors">
-                About
-              </Link>
-              <Link href="/contact" className="text-gray-600 hover:text-gray-900 transition-colors">
-                Contact
-              </Link>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <Link href="/auth/login" className="btn-secondary">
-                Sign In
-              </Link>
-              <Link href="/auth/register" className="btn-primary">
-                Get Started
-              </Link>
-            </div>
-          </div>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 gradient-bg opacity-10"></div>
@@ -170,56 +132,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold">At Bench</span>
-              </div>
-              <p className="text-gray-400">
-                Connecting talent with opportunity in the modern world.
-              </p>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold mb-4">For Job Seekers</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="/jobs" className="hover:text-white transition-colors">Browse Jobs</Link></li>
-                <li><Link href="/profile" className="hover:text-white transition-colors">Create Profile</Link></li>
-                <li><Link href="/applications" className="hover:text-white transition-colors">My Applications</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold mb-4">For Employers</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="/post-job" className="hover:text-white transition-colors">Post a Job</Link></li>
-                <li><Link href="/candidates" className="hover:text-white transition-colors">Find Candidates</Link></li>
-                <li><Link href="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h3 className="font-semibold mb-4">Company</h3>
-              <ul className="space-y-2 text-gray-400">
-                <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
-                <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 At Bench. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

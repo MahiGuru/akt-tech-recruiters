@@ -1,23 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { 
   User, 
   FileText, 
   Briefcase, 
-  Settings,
   Upload,
   Edit,
-  Star,
   MapPin,
   Phone,
   Mail,
   Calendar,
-  TrendingUp,
-  LogOut
+  TrendingUp
 } from 'lucide-react'
 import MultipleResumeUpload from '../../components/MultipleResumeUpload'
 import ResumeUpload from '@/app/(client)/components/ResumeUpload'
@@ -83,10 +80,6 @@ export default function EmployeeDashboard() {
     setShowResumeUpload(false)
   }
 
-  const handleLogout = async () => {
-    await signOut({ callbackUrl: '/' })
-  }
-
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -100,39 +93,13 @@ export default function EmployeeDashboard() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* Navigation */}
-      <nav className="nav">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <div className="logo w-10 h-10">
-                <Briefcase className="w-6 h-6" />
-              </div>
-              <span className="text-2xl font-bold text-gradient">At Bench</span>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                {user.image && (
-                  <img 
-                    src={user.image} 
-                    alt={user.name} 
-                    className="w-8 h-8 rounded-full"
-                  />
-                )}
-                <span className="text-secondary-600 hidden sm:block">Welcome, {user.name}</span>
-              </div>
-              <button onClick={handleLogout} className="btn btn-secondary btn-sm">
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-gray-600">Welcome back, {user.name}! Here's your job search overview.</p>
+        </div>
+
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Profile Section */}
           <div className="lg:col-span-1 space-y-6">
@@ -141,7 +108,7 @@ export default function EmployeeDashboard() {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold">Profile</h2>
                 <button
-                  onClick={() => setIsEditing(!isEditing)}
+                  onClick={() => router.push('/auth/profile/edit')}
                   className="btn btn-ghost btn-sm"
                   aria-label="Edit profile"
                 >
@@ -198,7 +165,6 @@ export default function EmployeeDashboard() {
               </div>
             </div> 
             
-
             {/* Quick Stats */}
             <div className="card">
               <h3 className="text-lg font-bold mb-4">Quick Stats</h3>
@@ -235,7 +201,7 @@ export default function EmployeeDashboard() {
                 </button>
                 
                 <button 
-                  onClick={() => setIsEditing(true)}
+                  onClick={() => router.push('/auth/profile/edit')}
                   className="p-6 border-2 border-dashed border-secondary-300 rounded-xl hover:border-primary-400 hover:bg-primary-50 transition-all text-left group"
                 >
                   <User className="w-8 h-8 text-primary-600 mb-3 group-hover:scale-110 transition-transform" />
