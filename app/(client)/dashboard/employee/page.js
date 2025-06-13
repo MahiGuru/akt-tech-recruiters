@@ -97,7 +97,7 @@ export default function EmployeeDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user.name}! Here's your job search overview.</p>
+          <p className="text-gray-600">Welcome back, {user.name}! Heres your job search overview.</p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">

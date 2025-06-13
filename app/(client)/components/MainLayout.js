@@ -99,8 +99,13 @@ export default function MainLayout({ children }) {
                   pathname === '/jobs' ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
                 }`}
               >
-                Browse Jobs
+                Jobs
               </Link>
+              <Link 
+                href="/contact" 
+                className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
+                  pathname === '/contact' ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
+                }`}>Contact</Link>
               
               {session?.user?.role === 'EMPLOYER' && (
                 <Link 
@@ -130,7 +135,7 @@ export default function MainLayout({ children }) {
             </div>
             
             {/* User Section */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 relative user-menu">
               {status === 'loading' ? (
                 <div className="loading-spinner w-6 h-6" />
               ) : session ? (
@@ -255,7 +260,7 @@ export default function MainLayout({ children }) {
                             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                           >
                             <Search className="w-4 h-4" />
-                            Browse Jobs
+                            Jobs
                           </Link>
                         </div>
 
@@ -313,7 +318,7 @@ export default function MainLayout({ children }) {
             <div>
               <h3 className="font-semibold mb-4">For Job Seekers</h3>
               <ul className="space-y-2 text-gray-400">
-                <li><Link href="/jobs" className="hover:text-white transition-colors">Browse Jobs</Link></li>
+                <li><Link href="/jobs" className="hover:text-white transition-colors">Jobs</Link></li>
                 <li><Link href="/dashboard/employee" className="hover:text-white transition-colors">My Applications</Link></li>
                 <li><Link href="/auth/profile/edit" className="hover:text-white transition-colors">Create Profile</Link></li>
               </ul>
