@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl
-    const token = req.nextauth?.token
+    const token = req.nextauth?.token;
 
     // Handle role-based redirects
     if (pathname.startsWith('/dashboard')) {
@@ -76,9 +76,9 @@ export default withAuth(
       }
     }
 
-    // Protect post-job route (employers only)
+    // Protect post-job route (employers and recruiters only)
     if (pathname.startsWith('/post-job')) {
-      if (!token || token.role !== 'EMPLOYER') {
+      if (!token || (token.role !== 'EMPLOYER' && token.role !== 'RECRUITER')) {
         return NextResponse.redirect(new URL('/', req.url))
       }
     }

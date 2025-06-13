@@ -155,8 +155,9 @@ export default function PostJob() {
     }
     
     const parsedUser = JSON.parse(userData)
-    if (parsedUser.role !== 'EMPLOYER') {
-      router.push('/dashboard/employee')
+    // Allow both EMPLOYER and RECRUITER to access
+    if (parsedUser.role !== 'EMPLOYER' && parsedUser.role !== 'RECRUITER') {
+      router.push('/dashboard/employee') // Redirects non-employers/recruiters
       return
     }
     
@@ -194,7 +195,7 @@ export default function PostJob() {
         benefits,
         skills: selectedSkills,
         jobTypes: selectedJobTypes,
-        employerId: user.id
+        employerId: user.id // Use recruiter's user ID as employerId
       }
 
       const response = await fetch('/api/jobs', {
@@ -225,27 +226,7 @@ export default function PostJob() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-purple-50">
-      {/* Navigation */}
-      <nav className="nav">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <div className="logo w-10 h-10">
-                <Building className="w-6 h-6" />
-              </div>
-              <span className="text-2xl font-bold text-gradient">A</span>
-            </div>
-            
-            <button 
-              onClick={() => router.push('/dashboard/employer')}
-              className="btn btn-secondary btn-sm"
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-      </nav>
-
+      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

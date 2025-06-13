@@ -633,3 +633,17 @@ select:focus-visible {
   color: #9ca3af;
   pointer-events: none;
 }
+
+.bg-button-card {
+  background: linear-gradient(135deg, rgb(140, 217, 255) 0%, #7eaeff 100%);
+  color: #333333;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+.bg-button-card:hover {
+  background: linear-gradient(135deg, rgb(116, 209, 255) 0%, #4387fc 100%);
+}
+
+
+

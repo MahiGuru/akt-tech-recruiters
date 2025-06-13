@@ -30,9 +30,11 @@ import {
   BarChart3,
   MessageSquare,
   Star,
-  Plus
+  Plus,
+  Briefcase // Import Briefcase icon for Post Job button
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import Link from 'next/link'
 
 export default function RecruiterDashboard() {
   const { data: session, status } = useSession()
@@ -294,11 +296,24 @@ const markAllNotificationsAsRead = async () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Navigation */} 
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
+          
+        <div className="card flex item-center bg-button-card">
+            <div className="flex items-center gap-4">
+                <Link href="/post-job" className="flex items-center justify-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <Briefcase className="w-4 h-4 mr-2" />
+                    </div>
+                    <div>
+                        <p className="text-2xl font-bold text-gray-900">Post Job</p>
+                    </div>
+                </Link>
+            </div>
+          </div>
+          
           <div className="card">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -318,7 +333,7 @@ const markAllNotificationsAsRead = async () => {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{stats.newApplications}</p>
-                <p className="text-gray-600">New Applications</p>
+                <p className="text-gray-600">Applications</p>
               </div>
             </div>
           </div>
