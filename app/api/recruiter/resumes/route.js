@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '../../../(client)/lib/auth'
 import { prisma } from '../../../(client)/lib/prisma';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
@@ -22,32 +24,125 @@ async function ensureUploadDir() {
 
 export async function GET(request) {
   try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session || session.user.role !== 'RECRUITER') {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const userId = searchParams.get('userId')
     const candidateId = searchParams.get('candidateId')
 
-    if (!userId && !candidateId) {
-      return NextResponse.json(
-        { message: 'User ID or Candidate ID is required' },
-        { status: 400 }
-      )
+    let resumes = []
+
+    if (userId) {
+      // Get resumes for a specific user
+      resumes = await prisma.resume.findMany({
+        where: { userId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: [
+          { isPrimary: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      })
+    } else if (candidateId) {
+      // Get resumes for a specific candidate
+      resumes = await prisma.resume.findMany({
+        where: { candidateId },
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: [
+          { isPrimary: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      })
+    } else {
+      // Get all resumes accessible to this recruiter
+      // This includes:
+      // 1. All user resumes (public resumes from job applications)
+      // 2. Resumes from candidates added by this recruiter
+      
+      const userResumes = await prisma.resume.findMany({
+        where: { 
+          userId: { not: null },
+          isActive: true
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              location: true,
+              experience: true,
+              skills: true
+            }
+          }
+        },
+        orderBy: [
+          { isPrimary: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      })
+
+      const candidateResumes = await prisma.resume.findMany({
+        where: { 
+          candidateId: { not: null },
+          isActive: true,
+          candidate: {
+            addedById: session.user.id // Only candidates added by this recruiter
+          }
+        },
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              location: true,
+              experience: true,
+              skills: true
+            }
+          }
+        },
+        orderBy: [
+          { isPrimary: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      })
+
+      resumes = [...userResumes, ...candidateResumes]
     }
 
-    const whereClause = userId ? { userId } : { candidateId }
-
-    const resumes = await prisma.resume.findMany({
-      where: whereClause,
-      orderBy: [
-        { isPrimary: 'desc' },
-        { createdAt: 'desc' }
-      ]
+    return NextResponse.json({
+      resumes,
+      total: resumes.length
     })
-
-    return NextResponse.json(resumes)
   } catch (error) {
     console.error('Error fetching resumes:', error)
     return NextResponse.json(
-      { message: 'Failed to fetch resumes' },
+      { message: 'Failed to fetch resumes', details: error.message },
       { status: 500 }
     )
   }
@@ -55,6 +150,15 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    const session = await getServerSession(authOptions)
+    
+    if (!session || session.user.role !== 'RECRUITER') {
+      return NextResponse.json(
+        { message: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     await ensureUploadDir()
     
     const formData = await request.formData()
@@ -100,10 +204,21 @@ export async function POST(request) {
       })
       if (user) ownerName = user.name
     } else if (candidateId) {
-      const candidate = await prisma.candidate.findUnique({
-        where: { id: candidateId },
+      const candidate = await prisma.candidate.findFirst({
+        where: { 
+          id: candidateId,
+          addedById: session.user.id // Ensure recruiter owns this candidate
+        },
         select: { name: true }
       })
+      
+      if (!candidate) {
+        return NextResponse.json(
+          { message: 'Candidate not found or access denied' },
+          { status: 404 }
+        )
+      }
+      
       if (candidate) ownerName = candidate.name
     }
 
@@ -141,7 +256,27 @@ export async function POST(request) {
     }
 
     const resume = await prisma.resume.create({
-      data: resumeData
+      data: resumeData,
+      include: {
+        ...(userId && {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }),
+        ...(candidateId && {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        })
+      }
     })
 
     return NextResponse.json({
@@ -152,7 +287,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Resume upload error:', error)
     return NextResponse.json(
-      { message: 'Failed to upload resume' },
+      { message: 'Failed to upload resume', details: error.message },
       { status: 500 }
     )
   }

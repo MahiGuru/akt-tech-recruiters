@@ -23,9 +23,12 @@ import {
   CheckCircle,
   AlertCircle,
   Users,
-  Target
+  Target,
+  Clock,
+  Video
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import InterviewManagement from './InterviewManagement'
 
 const CandidateManagement = () => {
   const [candidates, setCandidates] = useState([])
@@ -36,6 +39,7 @@ const CandidateManagement = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showApplicationModal, setShowApplicationModal] = useState(false)
+  const [showInterviewModal, setShowInterviewModal] = useState(false) // NEW
   const [stats, setStats] = useState({})
 
   // Form states
@@ -180,6 +184,12 @@ const CandidateManagement = () => {
     } catch (error) {
       toast.error('Something went wrong')
     }
+  }
+
+  // NEW: Handle interview scheduling
+  const handleScheduleInterview = (candidate) => {
+    setSelectedCandidate(candidate)
+    setShowInterviewModal(true)
   }
 
   const resetForm = () => {
@@ -415,11 +425,11 @@ const CandidateManagement = () => {
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <FileText className="w-4 h-4" />
-                          {candidate.resumes.length} resume(s)
+                          {candidate.resumes?.length || 0} resume(s)
                         </div>
                         <div className="flex items-center gap-1">
                           <Briefcase className="w-4 h-4" />
-                          {candidate.applications.length} application(s)
+                          {candidate.applications?.length || 0} application(s)
                         </div>
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
@@ -431,6 +441,15 @@ const CandidateManagement = () => {
                 </div>
                 
                 <div className="flex items-center gap-2 ml-4">
+                  {/* NEW: Schedule Interview Button */}
+                  <button
+                    onClick={() => handleScheduleInterview(candidate)}
+                    className="btn btn-ghost btn-sm text-purple-600 hover:text-purple-700"
+                    title="Schedule interview"
+                  >
+                    <Video className="w-4 h-4" />
+                  </button>
+                  
                   <button
                     onClick={() => {
                       setSelectedCandidate(candidate)
@@ -441,18 +460,21 @@ const CandidateManagement = () => {
                   >
                     <Send className="w-4 h-4" />
                   </button>
+                  
                   <button
                     className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
                     title="View details"
                   >
                     <Eye className="w-4 h-4" />
                   </button>
+                  
                   <button
                     className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
                     title="Edit candidate"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
+                  
                   <button
                     onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
                     className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
@@ -744,9 +766,9 @@ const CandidateManagement = () => {
                     className="input-field"
                   >
                     <option value="">Select resume (optional)</option>
-                    {selectedCandidate.resumes.map(resume => (
+                    {selectedCandidate.resumes?.map(resume => (
                       <option key={resume.id} value={resume.title}>
-                        {resume.title} ({resume.experienceLevel.replace('_', ' ')})
+                        {resume.title} ({resume.experienceLevel?.replace('_', ' ')})
                       </option>
                     ))}
                   </select>
@@ -775,6 +797,20 @@ const CandidateManagement = () => {
               </form>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* NEW: Interview Management Modal */}
+      <AnimatePresence>
+        {showInterviewModal && selectedCandidate && (
+          <InterviewManagement
+            candidateId={selectedCandidate.id}
+            candidateName={selectedCandidate.name}
+            onClose={() => {
+              setShowInterviewModal(false)
+              setSelectedCandidate(null)
+            }}
+          />
         )}
       </AnimatePresence>
     </div>

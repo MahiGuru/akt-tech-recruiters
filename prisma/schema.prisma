@@ -80,9 +80,12 @@ model User {
   sentNotifications     Notification[] @relation("NotificationSender")
   receivedNotifications Notification[] @relation("NotificationReceiver")
   
-  // NEW: Candidate management
+  // Candidate management
   addedCandidates       Candidate[] @relation("RecruiterAddedCandidate")
   recruiterApplications Application[] @relation("RecruiterSubmittedApplication")
+  
+  // NEW: Interview management
+  scheduledInterviews   Interview[] @relation("RecruiterScheduledInterview")
 
   @@map("users")
 }
@@ -104,7 +107,6 @@ model Recruiter {
   @@map("recruiters")
 }
 
-// NEW: Candidate model for recruiter-added candidates
 model Candidate {
   id           String   @id @default(cuid())
   name         String
@@ -126,9 +128,35 @@ model Candidate {
   
   resumes      Resume[]
   applications Application[]
+  // NEW: Interview scheduling
+  interviews   Interview[]
   
   @@unique([email, addedById]) // Prevent duplicate candidates by same recruiter
   @@map("candidates")
+}
+
+// NEW: Interview model
+model Interview {
+  id           String          @id @default(cuid())
+  title        String          // Interview title (e.g., "Technical Interview", "HR Round")
+  description  String?         // Additional details about the interview
+  scheduledAt  DateTime        // Interview date and time
+  duration     Int             @default(60) // Duration in minutes
+  meetingLink  String?         // Video call link or meeting room
+  notes        String?         // Recruiter notes about the interview
+  status       InterviewStatus @default(SCHEDULED)
+  reminderSent Boolean         @default(false) // Track if 15-min reminder was sent
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  
+  // Relations
+  candidateId  String
+  candidate    Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  scheduledById String         // Recruiter who scheduled the interview
+  scheduledBy   User           @relation("RecruiterScheduledInterview", fields: [scheduledById], references: [id])
+  
+  @@map("interviews")
 }
 
 model Notification {
@@ -137,13 +165,16 @@ model Notification {
   message     String
   type        NotificationType   @default(INFO)
   isRead      Boolean            @default(false)
-  senderId    String
+  senderId    String?            // Optional for system notifications
   receiverId  String
+  // NEW: Interview reminder fields
+  interviewId String?            // Link to interview for reminder notifications
+  scheduledFor DateTime?         // When to send the notification
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   
   // Relations
-  sender      User               @relation("NotificationSender", fields: [senderId], references: [id])
+  sender      User?              @relation("NotificationSender", fields: [senderId], references: [id])
   receiver    User               @relation("NotificationReceiver", fields: [receiverId], references: [id])
   
   @@map("notifications")
@@ -183,15 +214,15 @@ model Application {
   jobId      String
   job        Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
   
-  // UPDATED: Support both employee self-applications and recruiter applications
+  // Support both employee self-applications and recruiter applications
   employeeId String?
   employee   User?  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   
-  // NEW: Candidate applications (recruiter-submitted)
+  // Candidate applications (recruiter-submitted)
   candidateId String?
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   
-  // NEW: Track who submitted the application (for recruiter applications)
+  // Track who submitted the application (for recruiter applications)
   submittedById String?
   submittedBy   User?   @relation("RecruiterSubmittedApplication", fields: [submittedById], references: [id])
   
@@ -215,7 +246,7 @@ model Resume {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   
-  // UPDATED: Support both users and candidates
+  // Support both users and candidates
   userId         String?
   user           User?           @relation(fields: [userId], references: [id])
   
@@ -255,6 +286,7 @@ enum NotificationType {
   SUCCESS
   ERROR
   APPROVAL_REQUEST
+  INTERVIEW_REMINDER  // NEW: For interview notifications
 }
 
 enum JobType {
@@ -271,10 +303,19 @@ enum ApplicationStatus {
   REJECTED
 }
 
-// NEW: Candidate status
 enum CandidateStatus {
   ACTIVE
   PLACED
   INACTIVE
   DO_NOT_CONTACT
+}
+
+// NEW: Interview status enum
+enum InterviewStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
 }

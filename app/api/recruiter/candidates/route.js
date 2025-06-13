@@ -13,6 +13,7 @@ export async function GET(request) {
         { status: 401 }
       )
     }
+    
     // Check if user is a recruiter
     if (session.user.role !== 'RECRUITER') {
       return NextResponse.json(
@@ -58,7 +59,6 @@ export async function GET(request) {
       whereClause.status = status
     }
 
-    console.log("\n\n\n\n\n", prisma, "\n\n\n\n\n");
     // Fetch candidates with resumes and application counts
     const candidates = await prisma.candidate.findMany({
       where: whereClause,
@@ -77,7 +77,7 @@ export async function GET(request) {
                 id: true,
                 title: true,
                 company: true,
-                status: true
+                isActive: true
               }
             }
           },
@@ -128,7 +128,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching candidates:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -239,7 +239,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error creating candidate:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -339,7 +339,7 @@ export async function PUT(request) {
   } catch (error) {
     console.error('Error updating candidate:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
