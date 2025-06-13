@@ -25,7 +25,9 @@ import {
   Users,
   Target,
   Clock,
-  Video
+  Video,
+  Bell,
+  CalendarDays
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import InterviewManagement from './InterviewManagement'
@@ -39,7 +41,7 @@ const CandidateManagement = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showApplicationModal, setShowApplicationModal] = useState(false)
-  const [showInterviewModal, setShowInterviewModal] = useState(false) // NEW
+  const [showInterviewModal, setShowInterviewModal] = useState(false)
   const [stats, setStats] = useState({})
 
   // Form states
@@ -186,7 +188,6 @@ const CandidateManagement = () => {
     }
   }
 
-  // NEW: Handle interview scheduling
   const handleScheduleInterview = (candidate) => {
     setSelectedCandidate(candidate)
     setShowInterviewModal(true)
@@ -231,6 +232,52 @@ const CandidateManagement = () => {
       'DO_NOT_CONTACT': 'bg-red-100 text-red-800'
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  // NEW: Get upcoming interviews for a candidate
+  const getUpcomingInterviews = (candidate) => {
+    if (!candidate.interviews) return []
+    
+    const now = new Date()
+    return candidate.interviews
+      .filter(interview => {
+        const interviewDate = new Date(interview.scheduledAt)
+        return interviewDate > now && ['SCHEDULED', 'CONFIRMED'].includes(interview.status)
+      })
+      .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
+  }
+
+  // NEW: Format interview date and time
+  const formatInterviewDateTime = (scheduledAt) => {
+    const date = new Date(scheduledAt)
+    const now = new Date()
+    const diffDays = Math.ceil((date - now) / (1000 * 60 * 60 * 24))
+    
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    
+    if (diffDays === 0) {
+      return { text: `Today ${timeStr}`, urgent: true }
+    } else if (diffDays === 1) {
+      return { text: `Tomorrow ${timeStr}`, urgent: true }
+    } else if (diffDays <= 7) {
+      const dayName = date.toLocaleDateString([], { weekday: 'short' })
+      return { text: `${dayName} ${timeStr}`, urgent: false }
+    } else {
+      return { text: date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }), urgent: false }
+    }
+  }
+
+  // NEW: Get interview status color
+  const getInterviewStatusColor = (status) => {
+    const colors = {
+      'SCHEDULED': 'bg-blue-100 text-blue-800 border-blue-200',
+      'CONFIRMED': 'bg-green-100 text-green-800 border-green-200',
+      'IN_PROGRESS': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'COMPLETED': 'bg-purple-100 text-purple-800 border-purple-200',
+      'CANCELLED': 'bg-red-100 text-red-800 border-red-200',
+      'RESCHEDULED': 'bg-orange-100 text-orange-800 border-orange-200'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
   }
 
   const filteredCandidates = candidates.filter(candidate => {
@@ -303,10 +350,14 @@ const CandidateManagement = () => {
         </div>
         <div className="bg-white p-4 rounded-lg border">
           <div className="flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-orange-600" />
+            <CalendarDays className="w-5 h-5 text-orange-600" />
             <div>
-              <div className="text-2xl font-bold text-orange-600">{jobs.length}</div>
-              <div className="text-sm text-gray-600">Available Jobs</div>
+              <div className="text-2xl font-bold text-orange-600">
+                {candidates.reduce((count, candidate) => {
+                  return count + getUpcomingInterviews(candidate).length
+                }, 0)}
+              </div>
+              <div className="text-sm text-gray-600">Upcoming Interviews</div>
             </div>
           </div>
         </div>
@@ -359,133 +410,193 @@ const CandidateManagement = () => {
             )}
           </div>
         ) : (
-          filteredCandidates.map((candidate, index) => (
-            <motion.div
-              key={candidate.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-              className="bg-white p-6 rounded-lg border hover:shadow-md transition-shadow"
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
-                      <User className="w-6 h-6 text-primary-600" />
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{candidate.name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCandidateStatusColor(candidate.status)}`}>
-                          {candidate.status.replace('_', ' ')}
-                        </span>
+          filteredCandidates.map((candidate, index) => {
+            const upcomingInterviews = getUpcomingInterviews(candidate)
+            const hasUpcomingInterview = upcomingInterviews.length > 0
+            const nextInterview = upcomingInterviews[0]
+
+            return (
+              <motion.div
+                key={candidate.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+                className={`bg-white p-6 rounded-lg border hover:shadow-md transition-shadow ${
+                  hasUpcomingInterview ? 'ring-2 ring-blue-200 bg-blue-50' : ''
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-primary-600" />
                       </div>
                       
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
-                        <div className="flex items-center gap-1">
-                          <Mail className="w-4 h-4" />
-                          {candidate.email}
-                        </div>
-                        {candidate.phone && (
-                          <div className="flex items-center gap-1">
-                            <Phone className="w-4 h-4" />
-                            {candidate.phone}
-                          </div>
-                        )}
-                        {candidate.location && (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {candidate.location}
-                          </div>
-                        )}
-                        {candidate.experience && (
-                          <div className="flex items-center gap-1">
-                            <Award className="w-4 h-4" />
-                            {candidate.experience} years
-                          </div>
-                        )}
-                      </div>
-
-                      {candidate.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {candidate.skills.slice(0, 5).map((skill, idx) => (
-                            <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                              {skill}
-                            </span>
-                          ))}
-                          {candidate.skills.length > 5 && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                              +{candidate.skills.length - 5} more
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">{candidate.name}</h3>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCandidateStatusColor(candidate.status)}`}>
+                            {candidate.status.replace('_', ' ')}
+                          </span>
+                          {hasUpcomingInterview && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium flex items-center gap-1">
+                              <Bell className="w-3 h-3" />
+                              Interview Scheduled
                             </span>
                           )}
                         </div>
-                      )}
+                        
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
+                          <div className="flex items-center gap-1">
+                            <Mail className="w-4 h-4" />
+                            {candidate.email}
+                          </div>
+                          {candidate.phone && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="w-4 h-4" />
+                              {candidate.phone}
+                            </div>
+                          )}
+                          {candidate.location && (
+                            <div className="flex items-center gap-1">
+                              <MapPin className="w-4 h-4" />
+                              {candidate.location}
+                            </div>
+                          )}
+                          {candidate.experience && (
+                            <div className="flex items-center gap-1">
+                              <Award className="w-4 h-4" />
+                              {candidate.experience} years
+                            </div>
+                          )}
+                        </div>
 
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <FileText className="w-4 h-4" />
-                          {candidate.resumes?.length || 0} resume(s)
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Briefcase className="w-4 h-4" />
-                          {candidate.applications?.length || 0} application(s)
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          Added {new Date(candidate.createdAt).toLocaleDateString()}
+                        {/* NEW: Interview Information Display */}
+                        {hasUpcomingInterview && (
+                          <div className="mb-3 p-3 bg-white border border-blue-200 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="w-4 h-4 text-blue-600" />
+                                <span className="font-medium text-blue-900">{nextInterview.title}</span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getInterviewStatusColor(nextInterview.status)}`}>
+                                  {nextInterview.status}
+                                </span>
+                              </div>
+                              {nextInterview.meetingLink && (
+                                <a
+                                  href={nextInterview.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                                >
+                                  <Video className="w-3 h-3" />
+                                  Join Meeting
+                                </a>
+                              )}
+                            </div>
+                            <div className="mt-2 text-sm">
+                              <div className={`flex items-center gap-1 ${formatInterviewDateTime(nextInterview.scheduledAt).urgent ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
+                                <Clock className="w-3 h-3" />
+                                {formatInterviewDateTime(nextInterview.scheduledAt).text}
+                                <span className="text-gray-500">
+                                  ({nextInterview.duration} min)
+                                </span>
+                              </div>
+                              {nextInterview.description && (
+                                <p className="text-gray-600 mt-1">{nextInterview.description}</p>
+                              )}
+                            </div>
+                            {upcomingInterviews.length > 1 && (
+                              <div className="mt-2 text-xs text-blue-600">
+                                +{upcomingInterviews.length - 1} more interview(s) scheduled
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {candidate.skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {candidate.skills.slice(0, 5).map((skill, idx) => (
+                              <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                                {skill}
+                              </span>
+                            ))}
+                            {candidate.skills.length > 5 && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                +{candidate.skills.length - 5} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            {candidate.resumes?.length || 0} resume(s)
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Briefcase className="w-4 h-4" />
+                            {candidate.applications?.length || 0} application(s)
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <CalendarDays className="w-4 h-4" />
+                            {candidate.interviews?.length || 0} interview(s)
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            Added {new Date(candidate.createdAt).toLocaleDateString()}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                  
+                  <div className="flex items-center gap-2 ml-4">
+                    <button
+                      onClick={() => handleScheduleInterview(candidate)}
+                      className={`btn btn-ghost btn-sm ${hasUpcomingInterview ? 'text-blue-600 hover:text-blue-700' : 'text-purple-600 hover:text-purple-700'}`}
+                      title={hasUpcomingInterview ? 'Manage interviews' : 'Schedule interview'}
+                    >
+                      <Video className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setSelectedCandidate(candidate)
+                        setShowApplicationModal(true)
+                      }}
+                      className="btn btn-primary btn-sm"
+                      title="Apply to jobs"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
+                      title="View details"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
+                      title="Edit candidate"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    
+                    <button
+                      onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
+                      className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
+                      title="Delete candidate"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                
-                <div className="flex items-center gap-2 ml-4">
-                  {/* NEW: Schedule Interview Button */}
-                  <button
-                    onClick={() => handleScheduleInterview(candidate)}
-                    className="btn btn-ghost btn-sm text-purple-600 hover:text-purple-700"
-                    title="Schedule interview"
-                  >
-                    <Video className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => {
-                      setSelectedCandidate(candidate)
-                      setShowApplicationModal(true)
-                    }}
-                    className="btn btn-primary btn-sm"
-                    title="Apply to jobs"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
-                    title="View details"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
-                    title="Edit candidate"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                  
-                  <button
-                    onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
-                    className="btn btn-ghost btn-sm text-red-600 hover:text-red-700"
-                    title="Delete candidate"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          ))
+              </motion.div>
+            )
+          })
         )}
       </div>
 
@@ -800,7 +911,7 @@ const CandidateManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* NEW: Interview Management Modal */}
+      {/* Interview Management Modal */}
       <AnimatePresence>
         {showInterviewModal && selectedCandidate && (
           <InterviewManagement
@@ -809,6 +920,7 @@ const CandidateManagement = () => {
             onClose={() => {
               setShowInterviewModal(false)
               setSelectedCandidate(null)
+              fetchCandidates() // Refresh to show updated interview data
             }}
           />
         )}

@@ -59,7 +59,7 @@ export async function GET(request) {
       whereClause.status = status
     }
 
-    // Fetch candidates with resumes and application counts
+    // Fetch candidates with resumes, applications, and interviews
     const candidates = await prisma.candidate.findMany({
       where: whereClause,
       include: {
@@ -82,6 +82,18 @@ export async function GET(request) {
             }
           },
           orderBy: { createdAt: 'desc' }
+        },
+        interviews: {
+          include: {
+            scheduledBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          },
+          orderBy: { scheduledAt: 'asc' }
         },
         addedBy: {
           select: {
@@ -108,6 +120,19 @@ export async function GET(request) {
       _count: { status: true }
     })
 
+    // Calculate interview statistics
+    const upcomingInterviewsCount = await prisma.interview.count({
+      where: {
+        scheduledById: session.user.id,
+        scheduledAt: {
+          gte: new Date()
+        },
+        status: {
+          in: ['SCHEDULED', 'CONFIRMED']
+        }
+      }
+    })
+
     return NextResponse.json({
       candidates,
       pagination: {
@@ -118,6 +143,7 @@ export async function GET(request) {
       },
       stats: {
         total: totalCount,
+        upcomingInterviews: upcomingInterviewsCount,
         statusDistribution: statusStats.map(item => ({
           status: item.status,
           count: item._count.status
@@ -221,6 +247,17 @@ export async function POST(request) {
             }
           }
         },
+        interviews: {
+          include: {
+            scheduledBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
         addedBy: {
           select: {
             id: true,
@@ -317,6 +354,17 @@ export async function PUT(request) {
                 id: true,
                 title: true,
                 company: true
+              }
+            }
+          }
+        },
+        interviews: {
+          include: {
+            scheduledBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
               }
             }
           }
