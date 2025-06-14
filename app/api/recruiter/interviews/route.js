@@ -33,8 +33,16 @@ export async function GET(request) {
       whereClause.candidateId = candidateId
     }
 
+    // FIXED: Handle comma-separated status values
     if (status) {
-      whereClause.status = status
+      const statusValues = status.split(',').map(s => s.trim())
+      if (statusValues.length === 1) {
+        whereClause.status = statusValues[0]
+      } else {
+        whereClause.status = {
+          in: statusValues
+        }
+      }
     }
 
     if (fromDate || toDate) {
@@ -121,7 +129,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching interviews:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -180,13 +188,13 @@ export async function POST(request) {
       )
     }
 
-    // NEW LOGIC: Check for candidate's overlapping interviews
+    // Check for candidate's overlapping interviews
     const candidateOverlappingInterview = await prisma.interview.findFirst({
       where: {
-        candidateId: candidateId, // Check for this specific candidate
+        candidateId: candidateId,
         scheduledAt: {
-          gte: new Date(interviewTime.getTime() - (duration * 60 * 1000) + 1), // Add 1ms to prevent exact start time overlap issues
-          lt: new Date(interviewTime.getTime() + (duration * 60 * 1000) - 1)  // Subtract 1ms for the same reason
+          gte: new Date(interviewTime.getTime() - (duration * 60 * 1000) + 1),
+          lt: new Date(interviewTime.getTime() + (duration * 60 * 1000) - 1)
         },
         status: {
           in: ['SCHEDULED', 'CONFIRMED']
@@ -256,7 +264,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error creating interview:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -312,7 +320,7 @@ export async function PUT(request) {
       )
     }
 
-    // If rescheduling, validate new time and check for overlaps (both recruiter and candidate)
+    // If rescheduling, validate new time and check for overlaps
     if (scheduledAt) {
       const newTime = new Date(scheduledAt)
       if (newTime <= new Date()) {
@@ -322,10 +330,10 @@ export async function PUT(request) {
         )
       }
 
-      // Check for recruiter's overlapping interviews (excluding the current one being updated)
+      // Check for recruiter's overlapping interviews (excluding the current one)
       const recruiterOverlappingInterview = await prisma.interview.findFirst({
         where: {
-          id: { not: interviewId }, // Exclude the current interview
+          id: { not: interviewId },
           scheduledById: session.user.id,
           scheduledAt: {
             gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
@@ -344,11 +352,11 @@ export async function PUT(request) {
         )
       }
 
-      // NEW LOGIC: Check for candidate's overlapping interviews (excluding the current one being updated)
+      // Check for candidate's overlapping interviews (excluding the current one)
       const candidateOverlappingInterview = await prisma.interview.findFirst({
         where: {
-          id: { not: interviewId }, // Exclude the current interview
-          candidateId: existingInterview.candidateId, // Check for this specific candidate
+          id: { not: interviewId },
+          candidateId: existingInterview.candidateId,
           scheduledAt: {
             gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
             lt: new Date(newTime.getTime() + (duration * 60 * 1000) - 1)
@@ -434,7 +442,7 @@ export async function PUT(request) {
   } catch (error) {
     console.error('Error updating interview:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
@@ -495,7 +503,7 @@ export async function DELETE(request) {
   } catch (error) {
     console.error('Error deleting interview:', error)
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
   }
