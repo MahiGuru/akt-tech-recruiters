@@ -180,13 +180,13 @@ export async function POST(request) {
       )
     }
 
-    // Check for overlapping interviews
-    const overlappingInterview = await prisma.interview.findFirst({
+    // NEW LOGIC: Check for candidate's overlapping interviews
+    const candidateOverlappingInterview = await prisma.interview.findFirst({
       where: {
-        scheduledById: session.user.id,
+        candidateId: candidateId, // Check for this specific candidate
         scheduledAt: {
-          gte: new Date(interviewTime.getTime() - (duration * 60 * 1000)),
-          lte: new Date(interviewTime.getTime() + (duration * 60 * 1000))
+          gte: new Date(interviewTime.getTime() - (duration * 60 * 1000) + 1), // Add 1ms to prevent exact start time overlap issues
+          lt: new Date(interviewTime.getTime() + (duration * 60 * 1000) - 1)  // Subtract 1ms for the same reason
         },
         status: {
           in: ['SCHEDULED', 'CONFIRMED']
@@ -194,9 +194,9 @@ export async function POST(request) {
       }
     })
 
-    if (overlappingInterview) {
+    if (candidateOverlappingInterview) {
       return NextResponse.json(
-        { message: 'You have an overlapping interview scheduled for this time' },
+        { message: `This candidate already has an overlapping interview scheduled for this time. Please choose another slot for ${candidate.name}.` },
         { status: 400 }
       )
     }
@@ -312,12 +312,56 @@ export async function PUT(request) {
       )
     }
 
-    // If rescheduling, validate new time
+    // If rescheduling, validate new time and check for overlaps (both recruiter and candidate)
     if (scheduledAt) {
       const newTime = new Date(scheduledAt)
       if (newTime <= new Date()) {
         return NextResponse.json(
           { message: 'Interview must be scheduled for a future time' },
+          { status: 400 }
+        )
+      }
+
+      // Check for recruiter's overlapping interviews (excluding the current one being updated)
+      const recruiterOverlappingInterview = await prisma.interview.findFirst({
+        where: {
+          id: { not: interviewId }, // Exclude the current interview
+          scheduledById: session.user.id,
+          scheduledAt: {
+            gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
+            lt: new Date(newTime.getTime() + (duration * 60 * 1000) - 1)
+          },
+          status: {
+            in: ['SCHEDULED', 'CONFIRMED']
+          }
+        }
+      })
+
+      if (recruiterOverlappingInterview) {
+        return NextResponse.json(
+          { message: 'You have an overlapping interview scheduled for this time. Please choose another slot for yourself.' },
+          { status: 400 }
+        )
+      }
+
+      // NEW LOGIC: Check for candidate's overlapping interviews (excluding the current one being updated)
+      const candidateOverlappingInterview = await prisma.interview.findFirst({
+        where: {
+          id: { not: interviewId }, // Exclude the current interview
+          candidateId: existingInterview.candidateId, // Check for this specific candidate
+          scheduledAt: {
+            gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
+            lt: new Date(newTime.getTime() + (duration * 60 * 1000) - 1)
+          },
+          status: {
+            in: ['SCHEDULED', 'CONFIRMED']
+          }
+        }
+      })
+
+      if (candidateOverlappingInterview) {
+        return NextResponse.json(
+          { message: `This candidate already has an overlapping interview scheduled for this time. Please choose another slot for ${existingInterview.candidate.name}.` },
           { status: 400 }
         )
       }

@@ -847,3 +847,6 @@ select:focus-visible {
     background-position: 200% 0;
   }
 }
+.notification-bell{
+  background-color: #111827;
+}
