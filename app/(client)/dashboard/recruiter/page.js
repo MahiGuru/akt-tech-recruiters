@@ -140,7 +140,7 @@ export default function RecruiterDashboard() {
 
     // Initial fetch of all dashboard data
     fetchDashboardData();
-    
+
     // Set up interval for fetching notifications every 1 minute
     notificationIntervalRef.current = setInterval(() => {
       fetchNotifications();
@@ -451,21 +451,6 @@ const startNotificationSound = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-          <div className="card flex item-center bg-button-card">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/post-job"
-                className="flex items-center justify-center gap-4"
-              >
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <Briefcase className="w-4 h-4 mr-2" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900">Post Job</p>
-                </div>
-              </Link>
-            </div>
-          </div>
 
           <div className="card">
             <div className="flex items-center gap-4">
