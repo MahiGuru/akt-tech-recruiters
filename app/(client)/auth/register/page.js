@@ -1,3 +1,4 @@
+// app/(client)/auth/register/page.js (Updated version)
 'use client'
 
 import { Suspense, useState } from 'react'
@@ -11,16 +12,20 @@ import ContactDetailsForm from './ContactDetailsForm'
 import PasswordForm from './PasswordForm'
 import FormNavigation from './FormNavigation'
 import FooterLinks from './FooterLinks'
+import RegistrationSuccess from './RegistrationSuccess'
 
-//Loading..
 export default function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [role, setRole] = useState(searchParams.get('role') || 'EMPLOYEE')
   const [recruiterType, setRecruiterType] = useState('TA')
+  const [selectedAdmin, setSelectedAdmin] = useState('') // New state for admin selection
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
+  const [registrationComplete, setRegistrationComplete] = useState(false)
+  const [needsApproval, setNeedsApproval] = useState(false)
+  
   const { register, handleSubmit, formState: { errors }, watch, trigger } = useForm()
   const password = watch('password')
   const totalSteps = role === 'EMPLOYER' || role === 'RECRUITER' ? 3 : 2
@@ -28,15 +33,32 @@ export default function RegisterPage() {
   const onSubmit = async (data) => {
     setIsLoading(true)
     try {
-      const submitData = { ...data, role, ...(role === 'RECRUITER' && { recruiterType }) }
+      const submitData = { 
+        ...data, 
+        role, 
+        ...(role === 'RECRUITER' && { 
+          recruiterType: selectedAdmin === '' && recruiterType !== 'ADMIN' ? 'ADMIN' : recruiterType,
+          selectedAdmin: recruiterType === 'ADMIN' ? '' : selectedAdmin
+        }) 
+      }
+      
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(submitData)
       })
+      
       if (response.ok) {
-        toast.success('🎉 Registration successful! Welcome!')
-        router.push('/auth/login')
+        const result = await response.json()
+        
+        if (result.needsApproval) {
+          toast.success('🎉 Registration successful! Approval required.')
+          setNeedsApproval(true)
+        } else {
+          toast.success('🎉 Registration successful! Welcome!')
+        }
+        
+        setRegistrationComplete(true)
       } else {
         const error = await response.json()
         toast.error(error.message || 'Registration failed')
@@ -57,54 +79,66 @@ export default function RegisterPage() {
     const isValid = await trigger(fieldsToValidate)
     if (isValid && currentStep < totalSteps) setCurrentStep(currentStep + 1)
   }
+  
   const prevStep = () => currentStep > 1 && setCurrentStep(currentStep - 1)
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
       <div className="min-h-screen flex items-center justify-center py-12 px-4">
         <div className="relative max-w-lg w-full space-y-8">
-          <StepProgress totalSteps={totalSteps} currentStep={currentStep} />
+          {!registrationComplete && (
+            <StepProgress totalSteps={totalSteps} currentStep={currentStep} />
+          )}
+          
           <div className="card shadow-2xl border-0 bg-white/90 backdrop-blur-xl">
-            {currentStep === 1 && (
+            {registrationComplete ? (
+              <RegistrationSuccess role={role} needsApproval={needsApproval} />
+            ) : (
               <>
-                <RoleSelector role={role} setRole={setRole} />
-                <BasicInfoForm
-                  register={register}
-                  errors={errors}
-                  isLoading={isLoading}
-                  nextStep={nextStep}
-                />
+                {currentStep === 1 && (
+                  <>
+                    <RoleSelector role={role} setRole={setRole} />
+                    <BasicInfoForm
+                      register={register}
+                      errors={errors}
+                      isLoading={isLoading}
+                      nextStep={nextStep}
+                    />
+                  </>
+                )}
+                {currentStep === 2 && (
+                  <ContactDetailsForm
+                    role={role}
+                    recruiterType={recruiterType}
+                    setRecruiterType={setRecruiterType}
+                    selectedAdmin={selectedAdmin}
+                    setSelectedAdmin={setSelectedAdmin}
+                    register={register}
+                    errors={errors}
+                    isLoading={isLoading}
+                    nextStep={nextStep}
+                    prevStep={prevStep}
+                  />
+                )}
+                {currentStep === totalSteps && (
+                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                    <PasswordForm
+                      register={register}
+                      errors={errors}
+                      isLoading={isLoading}
+                      showPassword={showPassword}
+                      setShowPassword={setShowPassword}
+                      password={password}
+                    />
+                    <FormNavigation
+                      isLoading={isLoading}
+                      prevStep={prevStep}
+                    />
+                  </form>
+                )}
+                {!registrationComplete && <FooterLinks />}
               </>
             )}
-            {currentStep === 2 && (
-              <ContactDetailsForm
-                role={role}
-                recruiterType={recruiterType}
-                setRecruiterType={setRecruiterType}
-                register={register}
-                errors={errors}
-                isLoading={isLoading}
-                nextStep={nextStep}
-                prevStep={prevStep}
-              />
-            )}
-            {currentStep === totalSteps && (
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-                <PasswordForm
-                  register={register}
-                  errors={errors}
-                  isLoading={isLoading}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                  password={password}
-                />
-                <FormNavigation
-                  isLoading={isLoading}
-                  prevStep={prevStep}
-                />
-              </form>
-            )}
-            <FooterLinks />
           </div>
         </div>
       </div>

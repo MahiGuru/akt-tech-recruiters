@@ -1,3 +1,4 @@
+// app/(client)/lib/auth.js (Updated version)
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "./prisma"
 import GoogleProvider from "next-auth/providers/google"
@@ -111,6 +112,25 @@ export const authOptions = {
         // Add recruiter profile info to token
         if (user.role === 'RECRUITER' && user.recruiterProfile) {
           token.recruiterProfile = user.recruiterProfile
+        }
+      } else if (token.role === 'RECRUITER') {
+        // Refresh recruiter profile data on each request to get latest status
+        try {
+          const updatedProfile = await prisma.recruiter.findUnique({
+            where: { userId: token.id },
+            select: {
+              id: true,
+              recruiterType: true,
+              department: true,
+              isActive: true,
+              adminId: true
+            }
+          })
+          if (updatedProfile) {
+            token.recruiterProfile = updatedProfile
+          }
+        } catch (error) {
+          console.error("Error refreshing recruiter profile:", error)
         }
       }
       return token

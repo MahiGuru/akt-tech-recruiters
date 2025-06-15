@@ -51,9 +51,10 @@ export async function GET(request) {
 
     // Build where clause
     let whereClause = {
-      user: {
-        role: 'RECRUITER'
-      }
+      OR: [
+        { adminId: session.user.id }, // Team members
+        { userId: session.user.id, recruiterType: 'ADMIN' } // Current admin
+      ]
     }
 
     if (isActive !== null) {
