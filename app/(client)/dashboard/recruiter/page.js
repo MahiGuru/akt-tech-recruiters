@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -58,6 +58,10 @@ export default function RecruiterDashboard() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [resumeAnalytics, setResumeAnalytics] = useState({});
+  // Use useRef to persist the interval reference across re-renders
+  const playIntervalRef = useRef(null);
+  const notificationIntervalRef = useRef(null);
+
   const [stats, setStats] = useState({
     totalResumes: 0,
     mappedResumes: 0,
@@ -80,7 +84,7 @@ export default function RecruiterDashboard() {
 
   const user = session?.user;
   const isAdmin = user?.recruiterProfile?.recruiterType === "ADMIN";
-  let playInterval = null;
+  
 
   // Candidate status options
   const candidateStatuses = [
@@ -134,14 +138,26 @@ export default function RecruiterDashboard() {
       return;
     }
 
+    // Initial fetch of all dashboard data
     fetchDashboardData();
+    
+    // Set up interval for fetching notifications every 1 minute
+    notificationIntervalRef.current = setInterval(() => {
+      fetchNotifications();
+    }, 60 * 1000); // 1 minute
 
-    // Set up interval for fetching data every 3 minutes
-    const interval = setInterval(() => {
+    // Optional: Set up interval for refreshing dashboard data every 10 minutes (less frequent)
+    const dashboardRefreshInterval = setInterval(() => {
       fetchDashboardData();
-    }, 3 * 60 * 1000);
+    }, 10 * 60 * 1000); // 10 minutes
 
-    return () => clearInterval(interval);
+    // Cleanup function
+    return () => {
+      clearInterval(dashboardRefreshInterval);
+      cleanupNotificationFetching();
+      cleanupNotificationInterval();
+    };
+
   }, [session, status, router]);
 
   const fetchDashboardData = async () => {
@@ -207,9 +223,22 @@ export default function RecruiterDashboard() {
             }));
           }
         }
-      }
+      } 
+      
+      // Fetch notifications once during initial load
+      await fetchNotifications();
 
-      // Fetch notifications
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      toast.error("Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Separate function to fetch only notifications
+  const fetchNotifications = async () => {
+    try {
       const notificationsResponse = await fetch("/api/recruiter/notifications");
       if (notificationsResponse.ok) {
         const notificationsData = await notificationsResponse.json();
@@ -227,16 +256,17 @@ export default function RecruiterDashboard() {
           notificationsData.pagination?.unread ||
           notificationsList.filter((n) => !n.isRead).length;
 
-        if (unreadCount > 0 && unreadCount > stats.unreadNotifications) {
-          playInterval = setInterval(() => {
-            playNotificationSound();
-          }, 20000);
-        } else if (unreadCount > 0 && stats.unreadNotifications === 0) {
-          playInterval = setInterval(() => {
-            playNotificationSound();
-          }, 20000);
+        // Only manage sound interval if unread count changed
+        const previousUnreadCount = stats.unreadNotifications;
+        
+        if (unreadCount > 0) {
+          // Start sound if we have unread notifications and no interval is running
+          if (!playIntervalRef.current) {
+            startNotificationSound();
+          }
         } else {
-          clearInterval(playInterval);
+          // Stop sound if no unread notifications
+          cleanupNotificationInterval();
         }
 
         setStats((prevStats) => ({
@@ -244,12 +274,9 @@ export default function RecruiterDashboard() {
           unreadNotifications: unreadCount,
         }));
       }
-
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setIsLoading(false);
+      console.error("Error fetching notifications:", error);
+      // Don't show toast for notification fetch errors to avoid spam
     }
   };
 
@@ -273,12 +300,17 @@ export default function RecruiterDashboard() {
           )
         );
 
+        const newUnreadCount = Math.max(0, stats.unreadNotifications - 1);
+        
         setStats((prevStats) => ({
           ...prevStats,
-          unreadNotifications: Math.max(0, prevStats.unreadNotifications - 1),
+          unreadNotifications: newUnreadCount,
         }));
 
-        clearInterval(playInterval);
+        // Only clear interval if no more unread notifications
+        if (newUnreadCount === 0) {
+          cleanupNotificationInterval();
+        }
       }
     } catch (error) {
       console.error("Failed to mark notification as read:", error);
@@ -305,6 +337,9 @@ export default function RecruiterDashboard() {
           unreadNotifications: 0,
         }));
 
+        // Clear interval since all notifications are read
+        cleanupNotificationInterval();
+
         toast.success("All notifications marked as read");
       }
     } catch (error) {
@@ -313,6 +348,28 @@ export default function RecruiterDashboard() {
     }
   };
 
+// Add cleanup function
+const cleanupNotificationInterval = () => {
+  if (playIntervalRef.current) {
+    clearInterval(playIntervalRef.current);
+    playIntervalRef.current = null;
+  }
+};
+// Add cleanup function for notification fetching
+const cleanupNotificationFetching = () => {
+  if (notificationIntervalRef.current) {
+    clearInterval(notificationIntervalRef.current);
+    notificationIntervalRef.current = null;
+  }
+};
+
+// Add function to start notification sound
+const startNotificationSound = () => {
+  cleanupNotificationInterval(); // Clear any existing interval first
+  playIntervalRef.current = setInterval(() => {
+    playNotificationSound();
+  }, 20000);
+};
   const handleQuickStatusUpdate = async (candidateId, newStatus, candidateName) => {
     try {
       const response = await fetch('/api/recruiter/candidates', {
