@@ -37,6 +37,10 @@ import {
   Link as LinkIcon,
   Unlink,
   X,
+  MoreHorizontal,
+  UserX,
+  UserMinus,
+  Target
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -62,16 +66,53 @@ export default function RecruiterDashboard() {
     teamSize: 0,
     unreadNotifications: 0,
     candidatesWithResumes: 0,
-    candidatesWithoutResumes: 0
+    candidatesWithoutResumes: 0,
+    candidatesByStatus: {}
   });
   const [searchTerm, setSearchTerm] = useState("");
   const [experienceFilter, setExperienceFilter] = useState("");
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Candidate status management
+  const [showQuickStatusModal, setShowQuickStatusModal] = useState(false);
+  const [selectedCandidateForStatus, setSelectedCandidateForStatus] = useState(null);
+
   const user = session?.user;
   const isAdmin = user?.recruiterProfile?.recruiterType === "ADMIN";
   let playInterval = null;
+
+  // Candidate status options
+  const candidateStatuses = [
+    { 
+      value: 'ACTIVE', 
+      label: 'Active', 
+      color: 'bg-green-100 text-green-800 border-green-200',
+      icon: UserCheck,
+      description: 'Available for new opportunities'
+    },
+    { 
+      value: 'PLACED', 
+      label: 'Placed', 
+      color: 'bg-blue-100 text-blue-800 border-blue-200',
+      icon: Target,
+      description: 'Successfully placed in a position'
+    },
+    { 
+      value: 'INACTIVE', 
+      label: 'Inactive', 
+      color: 'bg-gray-100 text-gray-800 border-gray-200',
+      icon: UserMinus,
+      description: 'Not currently seeking opportunities'
+    },
+    { 
+      value: 'DO_NOT_CONTACT', 
+      label: 'Do Not Contact', 
+      color: 'bg-red-100 text-red-800 border-red-200',
+      icon: Shield,
+      description: 'Should not be contacted'
+    }
+  ];
 
   const playNotificationSound = () => {
     const audio = new Audio("/notificationSound2.mp3");
@@ -121,6 +162,17 @@ export default function RecruiterDashboard() {
         const candidatesData = await candidatesResponse.json();
         const candidatesList = candidatesData.candidates || candidatesData;
         setCandidates(candidatesList);
+
+        // Calculate status distribution
+        const statusDistribution = candidatesList.reduce((acc, candidate) => {
+          acc[candidate.status] = (acc[candidate.status] || 0) + 1;
+          return acc;
+        }, {});
+
+        setStats(prevStats => ({
+          ...prevStats,
+          candidatesByStatus: statusDistribution
+        }));
       }
 
       // Fetch resume analytics
@@ -261,6 +313,33 @@ export default function RecruiterDashboard() {
     }
   };
 
+  const handleQuickStatusUpdate = async (candidateId, newStatus, candidateName) => {
+    try {
+      const response = await fetch('/api/recruiter/candidates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId,
+          status: newStatus
+        })
+      });
+
+      if (response.ok) {
+        const statusLabel = candidateStatuses.find(s => s.value === newStatus)?.label || newStatus;
+        toast.success(`${candidateName}'s status updated to ${statusLabel}`);
+        await fetchDashboardData(); // Refresh all data
+        setShowQuickStatusModal(false);
+        setSelectedCandidateForStatus(null);
+      } else {
+        const error = await response.json();
+        toast.error(error.message || 'Failed to update candidate status');
+      }
+    } catch (error) {
+      console.error('Status update error:', error);
+      toast.error('Something went wrong while updating status');
+    }
+  };
+
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
   };
@@ -273,6 +352,16 @@ export default function RecruiterDashboard() {
   const handleMappingUpdate = (result) => {
     console.log('Mapping updated:', result);
     fetchDashboardData(); // Refresh all data
+  };
+
+  const getCandidateStatusColor = (status) => {
+    const statusConfig = candidateStatuses.find(s => s.value === status);
+    return statusConfig?.color || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
+
+  const getCandidateStatusIcon = (status) => {
+    const statusConfig = candidateStatuses.find(s => s.value === status);
+    return statusConfig?.icon || UserCheck;
   };
 
   if (status === "loading" || isLoading) {
@@ -305,7 +394,22 @@ export default function RecruiterDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
-          
+          <div className="card flex item-center bg-button-card">
+            <div className="flex items-center gap-4">
+              <Link
+                href="/post-job"
+                className="flex items-center justify-center gap-4"
+              >
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Briefcase className="w-4 h-4 mr-2" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-gray-900">Post Job</p>
+                </div>
+              </Link>
+            </div>
+          </div>
+
           <div className="card">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -378,6 +482,29 @@ export default function RecruiterDashboard() {
             </div>
           )}
         </div>
+
+        {/* Candidate Status Overview */}
+        {Object.keys(stats.candidatesByStatus).length > 0 && (
+          <div className="bg-white p-6 rounded-lg border mb-8">
+            <h3 className="text-lg font-semibold mb-4">Candidate Status Overview</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {candidateStatuses.map(status => {
+                const count = stats.candidatesByStatus[status.value] || 0;
+                const Icon = status.icon;
+                
+                return (
+                  <div key={status.value} className="text-center">
+                    <div className={`p-4 rounded-lg border ${status.color}`}>
+                      <Icon className="w-8 h-8 mx-auto mb-2" />
+                      <div className="text-2xl font-bold">{count}</div>
+                      <div className="text-sm">{status.label}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Enhanced Tab Navigation */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
@@ -457,17 +584,17 @@ export default function RecruiterDashboard() {
                   Team Management
                 </button>
 
-                    <button
-                    onClick={() => setActiveTab("analytics")}
-                    className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === "analytics"
-                        ? "border-primary-500 text-primary-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
-                    >
-                    <Users className="w-4 h-4 inline mr-2" />
-                    Analytics
-                    </button>
+                <button
+                onClick={() => setActiveTab("analytics")}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === "analytics"
+                    ? "border-primary-500 text-primary-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+                >
+                <Users className="w-4 h-4 inline mr-2" />
+                Analytics
+                </button>
                 </>
               )}
             </nav>
@@ -482,6 +609,57 @@ export default function RecruiterDashboard() {
                   Dashboard Overview
                 </h2>
                 
+                {/* Recent Candidates with Quick Status Update */}
+                <div className="bg-white p-6 rounded-lg border">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Recent Candidates</h3>
+                    <button
+                      onClick={() => setActiveTab("candidates")}
+                      className="btn btn-ghost btn-sm text-primary-600"
+                    >
+                      View All
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {candidates.slice(0, 5).map((candidate, index) => (
+                      <motion.div
+                        key={candidate.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-primary-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-gray-900">{candidate.name}</h4>
+                            <p className="text-sm text-gray-600">{candidate.email}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getCandidateStatusColor(candidate.status)}`}>
+                            {candidateStatuses.find(s => s.value === candidate.status)?.label || candidate.status}
+                          </span>
+                          <button
+                            onClick={() => {
+                              setSelectedCandidateForStatus(candidate);
+                              setShowQuickStatusModal(true);
+                            }}
+                            className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
+                            title="Update status"
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Resume Analytics */}
                 {resumeAnalytics.experienceDistribution && (
                   <div className="bg-white p-6 rounded-lg border">
@@ -498,29 +676,6 @@ export default function RecruiterDashboard() {
                     </div>
                   </div>
                 )}
-
-                {/* Candidate Resume Stats */}
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="bg-green-50 p-6 rounded-lg border border-green-200">
-                    <h3 className="text-lg font-semibold text-green-800 mb-2">
-                      Candidates with Resumes
-                    </h3>
-                    <div className="text-3xl font-bold text-green-600">
-                      {stats.candidatesWithResumes}
-                    </div>
-                    <p className="text-green-700">Ready for applications</p>
-                  </div>
-                  
-                  <div className="bg-orange-50 p-6 rounded-lg border border-orange-200">
-                    <h3 className="text-lg font-semibold text-orange-800 mb-2">
-                      Candidates without Resumes
-                    </h3>
-                    <div className="text-3xl font-bold text-orange-600">
-                      {stats.candidatesWithoutResumes}
-                    </div>
-                    <p className="text-orange-700">Need resume upload</p>
-                  </div>
-                </div>
 
                 {/* Quick Actions */}
                 <div className="bg-white p-6 rounded-lg border">
@@ -746,7 +901,7 @@ export default function RecruiterDashboard() {
               </div>
             )}
 
-            {/* Team Management Tab (unchanged) */}
+            {/* Team Management Tab */}
             {activeTab === "team" && isAdmin && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -759,7 +914,6 @@ export default function RecruiterDashboard() {
                   </button>
                 </div>
 
-                {/* Team management content remains the same */}
                 <div className="text-center py-12">
                   <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -778,9 +932,97 @@ export default function RecruiterDashboard() {
             )}
           </div>
         </div>
-      </div> 
+      </div>
 
-      {/* Floating Notifications Button (unchanged) */}
+      {/* Quick Status Update Modal */}
+      {showQuickStatusModal && selectedCandidateForStatus && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowQuickStatusModal(false);
+              setSelectedCandidateForStatus(null);
+            }
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-lg p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold">Update Status</h3>
+              <button
+                onClick={() => {
+                  setShowQuickStatusModal(false);
+                  setSelectedCandidateForStatus(null);
+                }}
+                className="btn btn-ghost btn-sm"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium mb-2">Candidate:</h4>
+                <p className="text-sm text-gray-600">
+                  <strong>{selectedCandidateForStatus.name}</strong> ({selectedCandidateForStatus.email})
+                </p>
+              </div>
+
+              <div>
+                <label className="form-label">Select New Status</label>
+                <div className="space-y-2">
+                  {candidateStatuses.map(status => {
+                    const Icon = status.icon;
+                    const isCurrentStatus = status.value === selectedCandidateForStatus.status;
+                    
+                    return (
+                      <button
+                        key={status.value}
+                        onClick={() => {
+                          if (!isCurrentStatus) {
+                            handleQuickStatusUpdate(
+                              selectedCandidateForStatus.id, 
+                              status.value, 
+                              selectedCandidateForStatus.name
+                            );
+                          }
+                        }}
+                        disabled={isCurrentStatus}
+                        className={`w-full p-4 text-left border rounded-lg transition-colors ${
+                          isCurrentStatus 
+                            ? 'border-gray-300 bg-gray-100 cursor-not-allowed opacity-50' 
+                            : 'border-gray-200 hover:border-primary-300 hover:bg-primary-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-5 h-5" />
+                          <div>
+                            <div className="font-medium">{status.label}</div>
+                            <div className="text-sm text-gray-600">{status.description}</div>
+                          </div>
+                          {isCurrentStatus && (
+                            <span className="ml-auto text-xs text-gray-500">(Current)</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+
+      {/* Floating Notifications Button */}
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
@@ -805,7 +1047,7 @@ export default function RecruiterDashboard() {
         </button>
       </motion.div>
 
-      {/* Notifications Panel (unchanged) */}
+      {/* Notifications Panel */}
       {showNotificationsPanel && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -821,7 +1063,6 @@ export default function RecruiterDashboard() {
             className="bg-white rounded-lg w-full max-w-2xl max-h-[80vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Notifications content remains the same */}
             <div className="flex justify-between items-center p-6 border-b border-gray-200">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-semibold text-gray-900">
