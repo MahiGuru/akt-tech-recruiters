@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Plus, 
@@ -27,10 +27,21 @@ import {
   Clock,
   Video,
   Bell,
-  CalendarDays
+  CalendarDays,
+  Star,
+  Download
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import InterviewManagement from './InterviewManagement'
+
+const experienceLevels = [
+  { value: 'ENTRY_LEVEL', label: 'Entry Level', color: 'bg-green-100 text-green-800' },
+  { value: 'MID_LEVEL', label: 'Mid Level', color: 'bg-blue-100 text-blue-800' },
+  { value: 'SENIOR_LEVEL', label: 'Senior Level', color: 'bg-purple-100 text-purple-800' },
+  { value: 'EXECUTIVE', label: 'Executive', color: 'bg-red-100 text-red-800' },
+  { value: 'FREELANCE', label: 'Freelance', color: 'bg-yellow-100 text-yellow-800' },
+  { value: 'INTERNSHIP', label: 'Internship', color: 'bg-gray-100 text-gray-800' }
+]
 
 const CandidateManagement = () => {
   const [candidates, setCandidates] = useState([])
@@ -40,9 +51,14 @@ const CandidateManagement = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
   const [showApplicationModal, setShowApplicationModal] = useState(false)
   const [showInterviewModal, setShowInterviewModal] = useState(false)
   const [stats, setStats] = useState({})
+
+  // File upload refs
+  const fileInputRef = useRef(null)
+  const editFileInputRef = useRef(null)
 
   // Form states
   const [candidateForm, setCandidateForm] = useState({
@@ -57,6 +73,25 @@ const CandidateManagement = () => {
     notes: ''
   })
 
+  const [editCandidateForm, setEditCandidateForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+    experience: '',
+    skills: [],
+    bio: '',
+    source: '',
+    notes: '',
+    status: 'ACTIVE'
+  })
+
+  // Resume upload states
+  const [selectedResumes, setSelectedResumes] = useState([])
+  const [editSelectedResumes, setEditSelectedResumes] = useState([])
+  const [isUploadingResumes, setIsUploadingResumes] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({})
+
   const [applicationForm, setApplicationForm] = useState({
     selectedJobs: [],
     coverLetter: '',
@@ -64,6 +99,16 @@ const CandidateManagement = () => {
   })
 
   const [newSkill, setNewSkill] = useState('')
+  const [editNewSkill, setEditNewSkill] = useState('')
+
+  const acceptedTypes = {
+    'application/pdf': '.pdf',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'text/plain': '.txt'
+  }
+
+  const maxFileSize = 5 * 1024 * 1024 // 5MB
 
   useEffect(() => {
     fetchCandidates()
@@ -101,6 +146,133 @@ const CandidateManagement = () => {
     }
   }
 
+  const validateFile = (file) => {
+    if (!Object.keys(acceptedTypes).includes(file.type)) {
+      throw new Error(`${file.name}: Please upload a PDF, DOC, DOCX, or TXT file`)
+    }
+    
+    if (file.size > maxFileSize) {
+      throw new Error(`${file.name}: File size must be less than 5MB`)
+    }
+    
+    return true
+  }
+
+  const handleFileSelect = (files, isEdit = false) => {
+    const fileList = Array.from(files)
+    const validFiles = []
+
+    fileList.forEach(file => {
+      try {
+        validateFile(file)
+        
+        // Auto-generate title and experience level
+        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "")
+        const title = nameWithoutExt.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()).trim()
+        
+        validFiles.push({
+          file,
+          title: title || 'Resume',
+          description: '',
+          experienceLevel: 'MID_LEVEL'
+        })
+      } catch (error) {
+        toast.error(error.message)
+      }
+    })
+
+    if (isEdit) {
+      setEditSelectedResumes(prev => [...prev, ...validFiles])
+    } else {
+      setSelectedResumes(prev => [...prev, ...validFiles])
+    }
+  }
+
+  const removeSelectedResume = (index, isEdit = false) => {
+    if (isEdit) {
+      setEditSelectedResumes(prev => prev.filter((_, i) => i !== index))
+    } else {
+      setSelectedResumes(prev => prev.filter((_, i) => i !== index))
+    }
+  }
+
+  const updateResumeData = (index, field, value, isEdit = false) => {
+    const updateFunction = isEdit ? setEditSelectedResumes : setSelectedResumes
+    updateFunction(prev => prev.map((resume, i) => 
+      i === index ? { ...resume, [field]: value } : resume
+    ))
+  }
+
+  const uploadResumesForCandidate = async (candidateId, resumeFiles) => {
+    if (resumeFiles.length === 0) return []
+
+    const uploadResults = []
+    setIsUploadingResumes(true)
+
+    for (let i = 0; i < resumeFiles.length; i++) {
+      const resumeData = resumeFiles[i]
+      const file = resumeData.file
+      
+      try {
+        setUploadProgress(prev => ({
+          ...prev,
+          [file.name]: { status: 'uploading', progress: 0 }
+        }))
+
+        const formData = new FormData()
+        formData.append('resume', file)
+        formData.append('candidateId', candidateId)
+        formData.append('title', resumeData.title)
+        formData.append('description', resumeData.description || '')
+        formData.append('experienceLevel', resumeData.experienceLevel)
+        formData.append('originalName', file.name)
+
+        // Simulate progress
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => ({
+            ...prev,
+            [file.name]: { 
+              status: 'uploading', 
+              progress: Math.min((prev[file.name]?.progress || 0) + 20, 90) 
+            }
+          }))
+        }, 200)
+
+        const response = await fetch('/api/recruiter/resumes', {
+          method: 'POST',
+          body: formData
+        })
+
+        clearInterval(progressInterval)
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.message || 'Upload failed')
+        }
+
+        const result = await response.json()
+        uploadResults.push({ file: file.name, success: true, data: result.resume })
+        
+        setUploadProgress(prev => ({
+          ...prev,
+          [file.name]: { status: 'success', progress: 100 }
+        }))
+
+      } catch (error) {
+        console.error(`Upload error for ${file.name}:`, error)
+        uploadResults.push({ file: file.name, success: false, error: error.message })
+        
+        setUploadProgress(prev => ({
+          ...prev,
+          [file.name]: { status: 'error', progress: 0, error: error.message }
+        }))
+      }
+    }
+
+    setIsUploadingResumes(false)
+    return uploadResults
+  }
+
   const handleAddCandidate = async (e) => {
     e.preventDefault()
     
@@ -119,12 +291,76 @@ const CandidateManagement = () => {
       if (response.ok) {
         const data = await response.json()
         toast.success('Candidate added successfully!')
+        
+        // Upload resumes if any
+        if (selectedResumes.length > 0) {
+          const uploadResults = await uploadResumesForCandidate(data.candidate.id, selectedResumes)
+          const successful = uploadResults.filter(r => r.success).length
+          const failed = uploadResults.filter(r => !r.success).length
+          
+          if (successful > 0) {
+            toast.success(`Uploaded ${successful} resume(s) for ${data.candidate.name}`)
+          }
+          if (failed > 0) {
+            toast.error(`Failed to upload ${failed} resume(s)`)
+          }
+        }
+        
         setCandidates([data.candidate, ...candidates])
         resetForm()
         setShowAddForm(false)
       } else {
         const error = await response.json()
         toast.error(error.message || 'Failed to add candidate')
+      }
+    } catch (error) {
+      toast.error('Something went wrong')
+    }
+  }
+
+  const handleEditCandidate = async (e) => {
+    e.preventDefault()
+    
+    if (!editCandidateForm.name || !editCandidateForm.email) {
+      toast.error('Name and email are required')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/recruiter/candidates', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidateId: selectedCandidate.id,
+          ...editCandidateForm
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        toast.success('Candidate updated successfully!')
+        
+        // Upload new resumes if any
+        if (editSelectedResumes.length > 0) {
+          const uploadResults = await uploadResumesForCandidate(selectedCandidate.id, editSelectedResumes)
+          const successful = uploadResults.filter(r => r.success).length
+          const failed = uploadResults.filter(r => !r.success).length
+          
+          if (successful > 0) {
+            toast.success(`Uploaded ${successful} new resume(s) for ${data.candidate.name}`)
+          }
+          if (failed > 0) {
+            toast.error(`Failed to upload ${failed} resume(s)`)
+          }
+        }
+        
+        // Update candidates list
+        setCandidates(candidates.map(c => c.id === selectedCandidate.id ? data.candidate : c))
+        resetEditForm()
+        setShowEditForm(false)
+      } else {
+        const error = await response.json()
+        toast.error(error.message || 'Failed to update candidate')
       }
     } catch (error) {
       toast.error('Something went wrong')
@@ -193,6 +429,24 @@ const CandidateManagement = () => {
     setShowInterviewModal(true)
   }
 
+  const handleEditClick = (candidate) => {
+    setSelectedCandidate(candidate)
+    setEditCandidateForm({
+      name: candidate.name,
+      email: candidate.email,
+      phone: candidate.phone || '',
+      location: candidate.location || '',
+      experience: candidate.experience || '',
+      skills: candidate.skills || [],
+      bio: candidate.bio || '',
+      source: candidate.source || '',
+      notes: candidate.notes || '',
+      status: candidate.status || 'ACTIVE'
+    })
+    setEditSelectedResumes([])
+    setShowEditForm(true)
+  }
+
   const resetForm = () => {
     setCandidateForm({
       name: '',
@@ -205,20 +459,48 @@ const CandidateManagement = () => {
       source: '',
       notes: ''
     })
+    setSelectedResumes([])
+    setUploadProgress({})
   }
 
-  const addSkill = () => {
-    if (newSkill.trim() && !candidateForm.skills.includes(newSkill.trim())) {
-      setCandidateForm(prev => ({
+  const resetEditForm = () => {
+    setEditCandidateForm({
+      name: '',
+      email: '',
+      phone: '',
+      location: '',
+      experience: '',
+      skills: [],
+      bio: '',
+      source: '',
+      notes: '',
+      status: 'ACTIVE'
+    })
+    setEditSelectedResumes([])
+    setUploadProgress({})
+    setSelectedCandidate(null)
+  }
+
+  const addSkill = (isEdit = false) => {
+    const skill = isEdit ? editNewSkill : newSkill
+    const setSkill = isEdit ? setEditNewSkill : setNewSkill
+    const form = isEdit ? editCandidateForm : candidateForm
+    const setForm = isEdit ? setEditCandidateForm : setCandidateForm
+
+    if (skill.trim() && !form.skills.includes(skill.trim())) {
+      setForm(prev => ({
         ...prev,
-        skills: [...prev.skills, newSkill.trim()]
+        skills: [...prev.skills, skill.trim()]
       }))
-      setNewSkill('')
+      setSkill('')
     }
   }
 
-  const removeSkill = (skillToRemove) => {
-    setCandidateForm(prev => ({
+  const removeSkill = (skillToRemove, isEdit = false) => {
+    const form = isEdit ? editCandidateForm : candidateForm
+    const setForm = isEdit ? setEditCandidateForm : setCandidateForm
+
+    setForm(prev => ({
       ...prev,
       skills: prev.skills.filter(skill => skill !== skillToRemove)
     }))
@@ -278,6 +560,22 @@ const CandidateManagement = () => {
       'RESCHEDULED': 'bg-orange-100 text-orange-800 border-orange-200'
     }
     return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
+  }
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
+
+  const getExperienceColor = (level) => {
+    return experienceLevels.find(l => l.value === level)?.color || 'bg-gray-100 text-gray-800'
+  }
+
+  const getExperienceLabel = (level) => {
+    return experienceLevels.find(l => l.value === level)?.label || level
   }
 
   const filteredCandidates = candidates.filter(candidate => {
@@ -579,6 +877,7 @@ const CandidateManagement = () => {
                     </button>
                     
                     <button
+                      onClick={() => handleEditClick(candidate)}
                       className="btn btn-ghost btn-sm text-gray-600 hover:text-gray-700"
                       title="Edit candidate"
                     >
@@ -609,7 +908,7 @@ const CandidateManagement = () => {
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
             onClick={(e) => {
-              if (e.target === e.currentTarget) {
+              if (e.target === e.currentTarget && !isUploadingResumes) {
                 setShowAddForm(false)
                 resetForm()
               }
@@ -619,7 +918,7 @@ const CandidateManagement = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-6">
@@ -630,81 +929,87 @@ const CandidateManagement = () => {
                     resetForm()
                   }}
                   className="btn btn-ghost btn-sm"
+                  disabled={isUploadingResumes}
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleAddCandidate} className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="form-group">
-                    <label className="form-label required">Name</label>
-                    <input
-                      type="text"
-                      value={candidateForm.name}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
-                      className="input-field"
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label required">Email</label>
-                    <input
-                      type="email"
-                      value={candidateForm.email}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, email: e.target.value }))}
-                      className="input-field"
-                      placeholder="john@example.com"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Phone</label>
-                    <input
-                      type="tel"
-                      value={candidateForm.phone}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
-                      className="input-field"
-                      placeholder="+1 (555) 123-4567"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Location</label>
-                    <input
-                      type="text"
-                      value={candidateForm.location}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, location: e.target.value }))}
-                      className="input-field"
-                      placeholder="New York, NY"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Experience (Years)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={candidateForm.experience}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
-                      className="input-field"
-                      placeholder="5"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Source</label>
-                    <input
-                      type="text"
-                      value={candidateForm.source}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, source: e.target.value }))}
-                      className="input-field"
-                      placeholder="LinkedIn, Referral, etc."
-                    />
+              <form onSubmit={handleAddCandidate} className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Basic Information</h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label className="form-label required">Name</label>
+                      <input
+                        type="text"
+                        value={candidateForm.name}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+                        className="input-field"
+                        placeholder="John Doe"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label required">Email</label>
+                      <input
+                        type="email"
+                        value={candidateForm.email}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="input-field"
+                        placeholder="john@example.com"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Phone</label>
+                      <input
+                        type="tel"
+                        value={candidateForm.phone}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
+                        className="input-field"
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Location</label>
+                      <input
+                        type="text"
+                        value={candidateForm.location}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, location: e.target.value }))}
+                        className="input-field"
+                        placeholder="New York, NY"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Experience (Years)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={candidateForm.experience}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
+                        className="input-field"
+                        placeholder="5"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Source</label>
+                      <input
+                        type="text"
+                        value={candidateForm.source}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, source: e.target.value }))}
+                        className="input-field"
+                        placeholder="LinkedIn, Referral, etc."
+                      />
+                    </div>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Skills</label>
+                {/* Skills */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Skills</h4>
                   <div className="space-y-3">
                     <div className="flex gap-2">
                       <input
@@ -746,28 +1051,163 @@ const CandidateManagement = () => {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Bio</label>
-                  <textarea
-                    value={candidateForm.bio}
-                    onChange={(e) => setCandidateForm(prev => ({ ...prev, bio: e.target.value }))}
-                    className="input-field"
-                    rows={3}
-                    placeholder="Brief description of the candidate's background and expertise..."
+                {/* Resume Upload Section */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Resume Upload (Optional)</h4>
+                  
+                  {selectedResumes.length === 0 ? (
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+                    >
+                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600">Click to upload resumes or drag and drop</p>
+                      <p className="text-sm text-gray-500 mt-1">PDF, DOC, DOCX, TXT (max 5MB each)</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {selectedResumes.map((resume, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-gray-600" />
+                              <span className="font-medium">{resume.file.name}</span>
+                              <span className="text-sm text-gray-500">
+                                ({formatFileSize(resume.file.size)})
+                              </span>
+                            </div>
+                            {!isUploadingResumes && (
+                              <button
+                                type="button"
+                                onClick={() => removeSelectedResume(index)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="form-label">Resume Title</label>
+                              <input
+                                type="text"
+                                value={resume.title}
+                                onChange={(e) => updateResumeData(index, 'title', e.target.value)}
+                                className="input-field"
+                                placeholder="e.g., Senior Developer Resume"
+                                disabled={isUploadingResumes}
+                              />
+                            </div>
+                            <div>
+                              <label className="form-label">Experience Level</label>
+                              <select
+                                value={resume.experienceLevel}
+                                onChange={(e) => updateResumeData(index, 'experienceLevel', e.target.value)}
+                                className="input-field"
+                                disabled={isUploadingResumes}
+                              >
+                                {experienceLevels.map(level => (
+                                  <option key={level.value} value={level.value}>
+                                    {level.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3">
+                            <label className="form-label">Description (Optional)</label>
+                            <textarea
+                              value={resume.description}
+                              onChange={(e) => updateResumeData(index, 'description', e.target.value)}
+                              className="input-field"
+                              rows={2}
+                              placeholder="Brief description of this resume"
+                              disabled={isUploadingResumes}
+                            />
+                          </div>
+
+                          {/* Upload Progress */}
+                          {uploadProgress[resume.file.name] && (
+                            <div className="mt-3">
+                              {uploadProgress[resume.file.name].status === 'uploading' && (
+                                <div className="flex items-center gap-2">
+                                  <div className="loading-spinner w-4 h-4" />
+                                  <span className="text-sm text-blue-600">
+                                    Uploading... {uploadProgress[resume.file.name].progress}%
+                                  </span>
+                                </div>
+                              )}
+                              {uploadProgress[resume.file.name].status === 'success' && (
+                                <div className="flex items-center gap-2 text-green-600">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-sm">Uploaded successfully</span>
+                                </div>
+                              )}
+                              {uploadProgress[resume.file.name].status === 'error' && (
+                                <div className="flex items-center gap-2 text-red-600">
+                                  <AlertCircle className="w-4 h-4" />
+                                  <span className="text-sm">{uploadProgress[resume.file.name].error}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {!isUploadingResumes && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 inline mr-2" />
+                          Add More Resumes
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={Object.values(acceptedTypes).join(',')}
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                    className="sr-only"
+                    multiple
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Notes</label>
-                  <textarea
-                    value={candidateForm.notes}
-                    onChange={(e) => setCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
-                    className="input-field"
-                    rows={2}
-                    placeholder="Internal notes about the candidate..."
-                  />
+                {/* Additional Information */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Additional Information</h4>
+                  <div className="space-y-4">
+                    <div className="form-group">
+                      <label className="form-label">Bio</label>
+                      <textarea
+                        value={candidateForm.bio}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, bio: e.target.value }))}
+                        className="input-field"
+                        rows={3}
+                        placeholder="Brief description of the candidate's background and expertise..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Notes</label>
+                      <textarea
+                        value={candidateForm.notes}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
+                        className="input-field"
+                        rows={2}
+                        placeholder="Internal notes about the candidate..."
+                      />
+                    </div>
+                  </div>
                 </div>
 
+                {/* Action Buttons */}
                 <div className="flex gap-3 pt-4">
                   <button
                     type="button"
@@ -776,12 +1216,427 @@ const CandidateManagement = () => {
                       resetForm()
                     }}
                     className="btn btn-secondary flex-1"
+                    disabled={isUploadingResumes}
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary flex-1">
-                    <Plus className="w-4 h-4" />
-                    Add Candidate
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary flex-1"
+                    disabled={isUploadingResumes}
+                  >
+                    {isUploadingResumes ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner w-4 h-4" />
+                        Adding Candidate...
+                      </div>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Add Candidate
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Candidate Modal */}
+      <AnimatePresence>
+        {showEditForm && selectedCandidate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !isUploadingResumes) {
+                setShowEditForm(false)
+                resetEditForm()
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold">Edit Candidate</h3>
+                <button
+                  onClick={() => {
+                    setShowEditForm(false)
+                    resetEditForm()
+                  }}
+                  className="btn btn-ghost btn-sm"
+                  disabled={isUploadingResumes}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditCandidate} className="space-y-6">
+                {/* Basic Information */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Basic Information</h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="form-group">
+                      <label className="form-label required">Name</label>
+                      <input
+                        type="text"
+                        value={editCandidateForm.name}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+                        className="input-field"
+                        placeholder="John Doe"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label required">Email</label>
+                      <input
+                        type="email"
+                        value={editCandidateForm.email}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="input-field"
+                        placeholder="john@example.com"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Phone</label>
+                      <input
+                        type="tel"
+                        value={editCandidateForm.phone}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
+                        className="input-field"
+                        placeholder="+1 (555) 123-4567"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Location</label>
+                      <input
+                        type="text"
+                        value={editCandidateForm.location}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, location: e.target.value }))}
+                        className="input-field"
+                        placeholder="New York, NY"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Experience (Years)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={editCandidateForm.experience}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
+                        className="input-field"
+                        placeholder="5"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Status</label>
+                      <select
+                        value={editCandidateForm.status}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, status: e.target.value }))}
+                        className="input-field"
+                      >
+                        <option value="ACTIVE">Active</option>
+                        <option value="PLACED">Placed</option>
+                        <option value="INACTIVE">Inactive</option>
+                        <option value="DO_NOT_CONTACT">Do Not Contact</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Source</label>
+                      <input
+                        type="text"
+                        value={editCandidateForm.source}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, source: e.target.value }))}
+                        className="input-field"
+                        placeholder="LinkedIn, Referral, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Resumes */}
+                {selectedCandidate.resumes && selectedCandidate.resumes.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-4">Current Resumes</h4>
+                    <div className="space-y-3">
+                      {selectedCandidate.resumes.map((resume, index) => (
+                        <div key={resume.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-4 h-4 text-gray-600" />
+                            <div>
+                              <div className="font-medium">{resume.title}</div>
+                              <div className="text-sm text-gray-600 flex items-center gap-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getExperienceColor(resume.experienceLevel)}`}>
+                                  {getExperienceLabel(resume.experienceLevel)}
+                                </span>
+                                {resume.isPrimary && (
+                                  <Star className="w-3 h-3 text-yellow-500 fill-current" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => window.open(resume.url, '_blank')}
+                              className="btn btn-ghost btn-sm text-blue-600 hover:text-blue-700"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <a
+                              href={resume.url}
+                              download={resume.originalName}
+                              className="btn btn-ghost btn-sm text-green-600 hover:text-green-700"
+                            >
+                              <Download className="w-4 h-4" />
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Skills */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Skills</h4>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editNewSkill}
+                        onChange={(e) => setEditNewSkill(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill(true))}
+                        className="input-field flex-1"
+                        placeholder="Add a skill (e.g., JavaScript, Project Management)"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => addSkill(true)}
+                        className="btn btn-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    {editCandidateForm.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {editCandidateForm.skills.map((skill, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-2 px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              onClick={() => removeSkill(skill, true)}
+                              className="text-primary-600 hover:text-primary-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Add New Resumes */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Add New Resumes (Optional)</h4>
+                  
+                  {editSelectedResumes.length === 0 ? (
+                    <div
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors"
+                    >
+                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600">Click to upload additional resumes</p>
+                      <p className="text-sm text-gray-500 mt-1">PDF, DOC, DOCX, TXT (max 5MB each)</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {editSelectedResumes.map((resume, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-gray-600" />
+                              <span className="font-medium">{resume.file.name}</span>
+                              <span className="text-sm text-gray-500">
+                                ({formatFileSize(resume.file.size)})
+                              </span>
+                            </div>
+                            {!isUploadingResumes && (
+                              <button
+                                type="button"
+                                onClick={() => removeSelectedResume(index, true)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="grid md:grid-cols-2 gap-3">
+                            <div>
+                              <label className="form-label">Resume Title</label>
+                              <input
+                                type="text"
+                                value={resume.title}
+                                onChange={(e) => updateResumeData(index, 'title', e.target.value, true)}
+                                className="input-field"
+                                placeholder="e.g., Senior Developer Resume"
+                                disabled={isUploadingResumes}
+                              />
+                            </div>
+                            <div>
+                              <label className="form-label">Experience Level</label>
+                              <select
+                                value={resume.experienceLevel}
+                                onChange={(e) => updateResumeData(index, 'experienceLevel', e.target.value, true)}
+                                className="input-field"
+                                disabled={isUploadingResumes}
+                              >
+                                {experienceLevels.map(level => (
+                                  <option key={level.value} value={level.value}>
+                                    {level.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-3">
+                            <label className="form-label">Description (Optional)</label>
+                            <textarea
+                              value={resume.description}
+                              onChange={(e) => updateResumeData(index, 'description', e.target.value, true)}
+                              className="input-field"
+                              rows={2}
+                              placeholder="Brief description of this resume"
+                              disabled={isUploadingResumes}
+                            />
+                          </div>
+
+                          {/* Upload Progress */}
+                          {uploadProgress[resume.file.name] && (
+                            <div className="mt-3">
+                              {uploadProgress[resume.file.name].status === 'uploading' && (
+                                <div className="flex items-center gap-2">
+                                  <div className="loading-spinner w-4 h-4" />
+                                  <span className="text-sm text-blue-600">
+                                    Uploading... {uploadProgress[resume.file.name].progress}%
+                                  </span>
+                                </div>
+                              )}
+                              {uploadProgress[resume.file.name].status === 'success' && (
+                                <div className="flex items-center gap-2 text-green-600">
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="text-sm">Uploaded successfully</span>
+                                </div>
+                              )}
+                              {uploadProgress[resume.file.name].status === 'error' && (
+                                <div className="flex items-center gap-2 text-red-600">
+                                  <AlertCircle className="w-4 h-4" />
+                                  <span className="text-sm">{uploadProgress[resume.file.name].error}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {!isUploadingResumes && (
+                        <button
+                          type="button"
+                          onClick={() => editFileInputRef.current?.click()}
+                          className="w-full p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-primary-400 hover:text-primary-600 transition-colors"
+                        >
+                          <Plus className="w-4 h-4 inline mr-2" />
+                          Add More Resumes
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept={Object.values(acceptedTypes).join(',')}
+                    onChange={(e) => handleFileSelect(e.target.files, true)}
+                    className="sr-only"
+                    multiple
+                  />
+                </div>
+
+                {/* Additional Information */}
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-4">Additional Information</h4>
+                  <div className="space-y-4">
+                    <div className="form-group">
+                      <label className="form-label">Bio</label>
+                      <textarea
+                        value={editCandidateForm.bio}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, bio: e.target.value }))}
+                        className="input-field"
+                        rows={3}
+                        placeholder="Brief description of the candidate's background and expertise..."
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Notes</label>
+                      <textarea
+                        value={editCandidateForm.notes}
+                        onChange={(e) => setEditCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
+                        className="input-field"
+                        rows={2}
+                        placeholder="Internal notes about the candidate..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditForm(false)
+                      resetEditForm()
+                    }}
+                    className="btn btn-secondary flex-1"
+                    disabled={isUploadingResumes}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary flex-1"
+                    disabled={isUploadingResumes}
+                  >
+                    {isUploadingResumes ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner w-4 h-4" />
+                        Updating Candidate...
+                      </div>
+                    ) : (
+                      <>
+                        <Edit className="w-4 h-4" />
+                        Update Candidate
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
