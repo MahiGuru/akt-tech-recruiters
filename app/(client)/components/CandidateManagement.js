@@ -1,7 +1,7 @@
-// app/(client)/components/CandidateManagement.js (Enhanced for Admin Access)
+// app/(client)/components/CandidateManagement.js (Fixed Version)
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
@@ -33,6 +33,215 @@ import {
   Settings,
   Download
 } from 'lucide-react'
+
+// Move CandidateForm outside the main component to prevent recreation
+const CandidateForm = ({ 
+  candidateForm, 
+  setCandidateForm, 
+  newSkill, 
+  setNewSkill, 
+  teamMembers, 
+  candidateStatuses, 
+  isAdmin, 
+  isEdit, 
+  onSubmit, 
+  onCancel,
+  addSkill,
+  removeSkill 
+}) => (
+  <form onSubmit={onSubmit} className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="form-group">
+        <label htmlFor="name" className="form-label required">Full Name</label>
+        <input
+          id="name"
+          type="text"
+          value={candidateForm.name}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+          className="input-field"
+          required
+          autoComplete="name"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="email" className="form-label required">Email</label>
+        <input
+          id="email"
+          type="email"
+          value={candidateForm.email}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, email: e.target.value }))}
+          className="input-field"
+          required
+          autoComplete="email"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="phone" className="form-label">Phone Number</label>
+        <input
+          id="phone"
+          type="tel"
+          value={candidateForm.phone}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
+          className="input-field"
+          autoComplete="tel"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="location" className="form-label">Location</label>
+        <input
+          id="location"
+          type="text"
+          value={candidateForm.location}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, location: e.target.value }))}
+          className="input-field"
+          autoComplete="address-level2"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="experience" className="form-label">Years of Experience</label>
+        <input
+          id="experience"
+          type="number"
+          min="0"
+          max="50"
+          value={candidateForm.experience}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
+          className="input-field"
+        />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="status" className="form-label">Status</label>
+        <select
+          id="status"
+          value={candidateForm.status}
+          onChange={(e) => setCandidateForm(prev => ({ ...prev, status: e.target.value }))}
+          className="input-field"
+        >
+          {candidateStatuses.map(status => (
+            <option key={status.value} value={status.value}>{status.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Admin can assign to specific recruiter */}
+      {isAdmin && !isEdit && (
+        <div className="form-group md:col-span-2">
+          <label htmlFor="addedById" className="form-label">Assign to Recruiter</label>
+          <select
+            id="addedById"
+            value={candidateForm.addedById}
+            onChange={(e) => setCandidateForm(prev => ({ ...prev, addedById: e.target.value }))}
+            className="input-field"
+          >
+            <option value="">Assign to myself</option>
+            {teamMembers.map(member => (
+              <option key={member.userId} value={member.userId}>
+                {member.user.name} ({member.recruiterType})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="source" className="form-label">Source</label>
+      <input
+        id="source"
+        type="text"
+        value={candidateForm.source}
+        onChange={(e) => setCandidateForm(prev => ({ ...prev, source: e.target.value }))}
+        className="input-field"
+        placeholder="e.g., LinkedIn, Referral, Job Board"
+      />
+    </div>
+
+    <div className="form-group">
+      <label className="form-label">Skills</label>
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newSkill}
+            onChange={(e) => setNewSkill(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
+            className="input-field flex-1"
+            placeholder="Add a skill"
+          />
+          <button
+            type="button"
+            onClick={addSkill}
+            className="btn btn-primary"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        
+        {candidateForm.skills.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {candidateForm.skills.map((skill, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+              >
+                {skill}
+                <button
+                  type="button"
+                  onClick={() => removeSkill(skill)}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="bio" className="form-label">Bio</label>
+      <textarea
+        id="bio"
+        value={candidateForm.bio}
+        onChange={(e) => setCandidateForm(prev => ({ ...prev, bio: e.target.value }))}
+        className="input-field"
+        rows={3}
+        placeholder="Brief description about the candidate..."
+      />
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="notes" className="form-label">Notes</label>
+      <textarea
+        id="notes"
+        value={candidateForm.notes}
+        onChange={(e) => setCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
+        className="input-field"
+        rows={3}
+        placeholder="Internal notes about the candidate..."
+      />
+    </div>
+
+    <div className="flex gap-4 pt-6">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="btn btn-secondary flex-1"
+      >
+        Cancel
+      </button>
+      <button type="submit" className="btn btn-primary flex-1">
+        {isEdit ? 'Update Candidate' : 'Add Candidate'}
+      </button>
+    </div>
+  </form>
+)
 
 const CandidateManagement = () => {
   const { data: session } = useSession()
@@ -66,12 +275,12 @@ const CandidateManagement = () => {
   })
   const [newSkill, setNewSkill] = useState('')
 
-  const candidateStatuses = [
+  const candidateStatuses = useMemo(() => [
     { value: 'ACTIVE', label: 'Active', color: 'bg-green-100 text-green-800', description: 'Available for opportunities' },
     { value: 'PLACED', label: 'Placed', color: 'bg-blue-100 text-blue-800', description: 'Successfully placed' },
     { value: 'INACTIVE', label: 'Inactive', color: 'bg-gray-100 text-gray-800', description: 'Not seeking opportunities' },
     { value: 'DO_NOT_CONTACT', label: 'Do Not Contact', color: 'bg-red-100 text-red-800', description: 'Should not be contacted' }
-  ]
+  ], [])
 
   const isAdmin = session?.user?.recruiterProfile?.recruiterType === 'ADMIN'
 
@@ -113,7 +322,7 @@ const CandidateManagement = () => {
     }
   }
 
-  const handleAddCandidate = async (e) => {
+  const handleAddCandidate = useCallback(async (e) => {
     e.preventDefault()
     try {
       const response = await fetch('/api/recruiter/candidates', {
@@ -135,9 +344,9 @@ const CandidateManagement = () => {
       console.error('Error adding candidate:', error)
       toast.error('Failed to add candidate')
     }
-  }
+  }, [candidateForm])
 
-  const handleUpdateCandidate = async (e) => {
+  const handleUpdateCandidate = useCallback(async (e) => {
     e.preventDefault()
     if (!selectedCandidate) return
 
@@ -165,7 +374,7 @@ const CandidateManagement = () => {
       console.error('Error updating candidate:', error)
       toast.error('Failed to update candidate')
     }
-  }
+  }, [candidateForm, selectedCandidate])
 
   const handleDeleteCandidate = async (candidateId, candidateName) => {
     if (!confirm(`Are you sure you want to delete ${candidateName}? This action cannot be undone.`)) {
@@ -227,7 +436,7 @@ const CandidateManagement = () => {
     }
   }
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setCandidateForm({
       name: '',
       email: '',
@@ -242,9 +451,9 @@ const CandidateManagement = () => {
       addedById: ''
     })
     setNewSkill('')
-  }
+  }, [])
 
-  const addSkill = () => {
+  const addSkill = useCallback(() => {
     if (newSkill.trim() && !candidateForm.skills.includes(newSkill.trim())) {
       setCandidateForm(prev => ({
         ...prev,
@@ -252,16 +461,16 @@ const CandidateManagement = () => {
       }))
       setNewSkill('')
     }
-  }
+  }, [newSkill, candidateForm.skills])
 
-  const removeSkill = (skillToRemove) => {
+  const removeSkill = useCallback((skillToRemove) => {
     setCandidateForm(prev => ({
       ...prev,
       skills: prev.skills.filter(skill => skill !== skillToRemove)
     }))
-  }
+  }, [])
 
-  const openEditModal = (candidate) => {
+  const openEditModal = useCallback((candidate) => {
     setSelectedCandidate(candidate)
     setCandidateForm({
       name: candidate.name || '',
@@ -277,7 +486,18 @@ const CandidateManagement = () => {
       addedById: candidate.addedById || ''
     })
     setShowEditModal(true)
-  }
+  }, [])
+
+  const handleAddModalCancel = useCallback(() => {
+    setShowAddModal(false)
+    resetForm()
+  }, [resetForm])
+
+  const handleEditModalCancel = useCallback(() => {
+    setShowEditModal(false)
+    setSelectedCandidate(null)
+    resetForm()
+  }, [resetForm])
 
   const toggleExpanded = (candidateId) => {
     setExpandedCandidates(prev => {
@@ -292,230 +512,32 @@ const CandidateManagement = () => {
   }
 
   // Filter and sort candidates
-  const filteredAndSortedCandidates = candidates
-    .filter(candidate => {
-      const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           candidate.skills?.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
-      
-      const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter
-      const matchesRecruiter = recruiterFilter === 'all' || candidate.addedById === recruiterFilter
+  const filteredAndSortedCandidates = useMemo(() => 
+    candidates
+      .filter(candidate => {
+        const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             candidate.skills?.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+        
+        const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter
+        const matchesRecruiter = recruiterFilter === 'all' || candidate.addedById === recruiterFilter
 
-      return matchesSearch && matchesStatus && matchesRecruiter
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.createdAt) - new Date(a.createdAt)
-        case 'oldest':
-          return new Date(a.createdAt) - new Date(b.createdAt)
-        case 'name':
-          return a.name.localeCompare(b.name)
-        case 'status':
-          return a.status.localeCompare(b.status)
-        default:
-          return 0
-      }
-    })
-
-  const CandidateForm = ({ isEdit = false }) => (
-    <form onSubmit={isEdit ? handleUpdateCandidate : handleAddCandidate} className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="form-group">
-          <label htmlFor="name" className="form-label required">Full Name</label>
-          <input
-            id="name"
-            type="text"
-            value={candidateForm.name}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
-            className="input-field"
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="email" className="form-label required">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={candidateForm.email}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, email: e.target.value }))}
-            className="input-field"
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="phone" className="form-label">Phone Number</label>
-          <input
-            id="phone"
-            type="tel"
-            value={candidateForm.phone}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, phone: e.target.value }))}
-            className="input-field"
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="location" className="form-label">Location</label>
-          <input
-            id="location"
-            type="text"
-            value={candidateForm.location}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, location: e.target.value }))}
-            className="input-field"
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="experience" className="form-label">Years of Experience</label>
-          <input
-            id="experience"
-            type="number"
-            min="0"
-            max="50"
-            value={candidateForm.experience}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, experience: e.target.value }))}
-            className="input-field"
-          />
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="status" className="form-label">Status</label>
-          <select
-            id="status"
-            value={candidateForm.status}
-            onChange={(e) => setCandidateForm(prev => ({ ...prev, status: e.target.value }))}
-            className="input-field"
-          >
-            {candidateStatuses.map(status => (
-              <option key={status.value} value={status.value}>{status.label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Admin can assign to specific recruiter */}
-        {isAdmin && !isEdit && (
-          <div className="form-group md:col-span-2">
-            <label htmlFor="addedById" className="form-label">Assign to Recruiter</label>
-            <select
-              id="addedById"
-              value={candidateForm.addedById}
-              onChange={(e) => setCandidateForm(prev => ({ ...prev, addedById: e.target.value }))}
-              className="input-field"
-            >
-              <option value="">Assign to myself</option>
-              {teamMembers.map(member => (
-                <option key={member.userId} value={member.userId}>
-                  {member.user.name} ({member.recruiterType})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="source" className="form-label">Source</label>
-        <input
-          id="source"
-          type="text"
-          value={candidateForm.source}
-          onChange={(e) => setCandidateForm(prev => ({ ...prev, source: e.target.value }))}
-          className="input-field"
-          placeholder="e.g., LinkedIn, Referral, Job Board"
-        />
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Skills</label>
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newSkill}
-              onChange={(e) => setNewSkill(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
-              className="input-field flex-1"
-              placeholder="Add a skill"
-            />
-            <button
-              type="button"
-              onClick={addSkill}
-              className="btn btn-primary"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-          
-          {candidateForm.skills.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {candidateForm.skills.map((skill, index) => (
-                <span
-                  key={index}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                >
-                  {skill}
-                  <button
-                    type="button"
-                    onClick={() => removeSkill(skill)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="bio" className="form-label">Bio</label>
-        <textarea
-          id="bio"
-          value={candidateForm.bio}
-          onChange={(e) => setCandidateForm(prev => ({ ...prev, bio: e.target.value }))}
-          className="input-field"
-          rows={3}
-          placeholder="Brief description about the candidate..."
-        />
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="notes" className="form-label">Notes</label>
-        <textarea
-          id="notes"
-          value={candidateForm.notes}
-          onChange={(e) => setCandidateForm(prev => ({ ...prev, notes: e.target.value }))}
-          className="input-field"
-          rows={3}
-          placeholder="Internal notes about the candidate..."
-        />
-      </div>
-
-      <div className="flex gap-4 pt-6">
-        <button
-          type="button"
-          onClick={() => {
-            if (isEdit) {
-              setShowEditModal(false)
-              setSelectedCandidate(null)
-            } else {
-              setShowAddModal(false)
-            }
-            resetForm()
-          }}
-          className="btn btn-secondary flex-1"
-        >
-          Cancel
-        </button>
-        <button type="submit" className="btn btn-primary flex-1">
-          {isEdit ? 'Update Candidate' : 'Add Candidate'}
-        </button>
-      </div>
-    </form>
-  )
+        return matchesSearch && matchesStatus && matchesRecruiter
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case 'newest':
+            return new Date(b.createdAt) - new Date(a.createdAt)
+          case 'oldest':
+            return new Date(a.createdAt) - new Date(b.createdAt)
+          case 'name':
+            return a.name.localeCompare(b.name)
+          case 'status':
+            return a.status.localeCompare(b.status)
+          default:
+            return 0
+        }
+      }), [candidates, searchTerm, statusFilter, recruiterFilter, sortBy])
 
   return (
     <div className="space-y-6">
@@ -809,7 +831,20 @@ const CandidateManagement = () => {
               <h3 className="text-lg font-semibold text-gray-900">Add New Candidate</h3>
             </div>
             <div className="p-6">
-              <CandidateForm />
+              <CandidateForm
+                candidateForm={candidateForm}
+                setCandidateForm={setCandidateForm}
+                newSkill={newSkill}
+                setNewSkill={setNewSkill}
+                teamMembers={teamMembers}
+                candidateStatuses={candidateStatuses}
+                isAdmin={isAdmin}
+                isEdit={false}
+                onSubmit={handleAddCandidate}
+                onCancel={handleAddModalCancel}
+                addSkill={addSkill}
+                removeSkill={removeSkill}
+              />
             </div>
           </motion.div>
         </motion.div>
@@ -832,7 +867,20 @@ const CandidateManagement = () => {
               <h3 className="text-lg font-semibold text-gray-900">Edit {selectedCandidate.name}</h3>
             </div>
             <div className="p-6">
-              <CandidateForm isEdit={true} />
+              <CandidateForm
+                candidateForm={candidateForm}
+                setCandidateForm={setCandidateForm}
+                newSkill={newSkill}
+                setNewSkill={setNewSkill}
+                teamMembers={teamMembers}
+                candidateStatuses={candidateStatuses}
+                isAdmin={isAdmin}
+                isEdit={true}
+                onSubmit={handleUpdateCandidate}
+                onCancel={handleEditModalCancel}
+                addSkill={addSkill}
+                removeSkill={removeSkill}
+              />
             </div>
           </motion.div>
         </motion.div>

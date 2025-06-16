@@ -8,16 +8,19 @@ CREATE TYPE "Role" AS ENUM ('EMPLOYEE', 'EMPLOYER', 'RECRUITER');
 CREATE TYPE "RecruiterType" AS ENUM ('ADMIN', 'TA', 'HR', 'CS', 'LEAD', 'JUNIOR');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('INFO', 'WARNING', 'SUCCESS', 'ERROR', 'APPROVAL_REQUEST');
+CREATE TYPE "NotificationType" AS ENUM ('INFO', 'WARNING', 'SUCCESS', 'ERROR', 'APPROVAL_REQUEST', 'INTERVIEW_REMINDER');
 
 -- CreateEnum
-CREATE TYPE "JobType" AS ENUM ('FULL_TIME', 'PART_TIME', 'CONTRACT', 'REMOTE');
+CREATE TYPE "JobType" AS ENUM ('FULL_TIME', 'PART_TIME', 'CONTRACT', 'REMOTE', 'HYBRID', 'INTERNSHIP', 'FREELANCE');
 
 -- CreateEnum
 CREATE TYPE "ApplicationStatus" AS ENUM ('PENDING', 'REVIEWED', 'ACCEPTED', 'REJECTED');
 
 -- CreateEnum
 CREATE TYPE "CandidateStatus" AS ENUM ('ACTIVE', 'PLACED', 'INACTIVE', 'DO_NOT_CONTACT');
+
+-- CreateEnum
+CREATE TYPE "InterviewStatus" AS ENUM ('SCHEDULED', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'RESCHEDULED');
 
 -- CreateTable
 CREATE TABLE "accounts" (
@@ -110,14 +113,35 @@ CREATE TABLE "candidates" (
 );
 
 -- CreateTable
+CREATE TABLE "interviews" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "scheduledAt" TIMESTAMP(3) NOT NULL,
+    "duration" INTEGER NOT NULL DEFAULT 60,
+    "meetingLink" TEXT,
+    "notes" TEXT,
+    "status" "InterviewStatus" NOT NULL DEFAULT 'SCHEDULED',
+    "reminderSent" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "candidateId" TEXT NOT NULL,
+    "scheduledById" TEXT NOT NULL,
+
+    CONSTRAINT "interviews_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "notifications" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "message" TEXT NOT NULL,
     "type" "NotificationType" NOT NULL DEFAULT 'INFO',
     "isRead" BOOLEAN NOT NULL DEFAULT false,
-    "senderId" TEXT NOT NULL,
+    "senderId" TEXT,
     "receiverId" TEXT NOT NULL,
+    "interviewId" TEXT,
+    "scheduledFor" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -131,6 +155,8 @@ CREATE TABLE "jobs" (
     "company" TEXT NOT NULL,
     "location" TEXT NOT NULL,
     "type" "JobType" NOT NULL DEFAULT 'FULL_TIME',
+    "jobTypes" TEXT[],
+    "skills" TEXT[],
     "salary" TEXT NOT NULL,
     "description" TEXT NOT NULL,
     "requirements" TEXT[],
@@ -223,7 +249,13 @@ ALTER TABLE "recruiters" ADD CONSTRAINT "recruiters_adminId_fkey" FOREIGN KEY ("
 ALTER TABLE "candidates" ADD CONSTRAINT "candidates_addedById_fkey" FOREIGN KEY ("addedById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "notifications" ADD CONSTRAINT "notifications_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "interviews" ADD CONSTRAINT "interviews_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "candidates"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "interviews" ADD CONSTRAINT "interviews_scheduledById_fkey" FOREIGN KEY ("scheduledById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_receiverId_fkey" FOREIGN KEY ("receiverId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

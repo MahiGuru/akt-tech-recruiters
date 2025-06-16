@@ -1,4 +1,4 @@
-// middleware.js (Enhanced version)
+// middleware.js (Final Fixed version)
 import { withAuth } from "next-auth/middleware"
 import { NextResponse } from "next/server"
 
@@ -7,7 +7,31 @@ export default withAuth(
     const { pathname } = req.nextUrl
     const token = req.nextauth?.token;
 
-    // Handle role-based redirects
+    // IMPORTANT: Handle post-job route FIRST to prevent conflicts
+    if (pathname.startsWith('/post-job')) {
+      if (!token) {
+        return NextResponse.redirect(new URL('/auth/login', req.url))
+      }
+      
+      // Allow EMPLOYERS always
+      if (token.role === 'EMPLOYER') {
+        return NextResponse.next()
+      }
+      
+      // Allow active RECRUITERS
+      if (token.role === 'RECRUITER') {
+        const recruiterProfile = token.recruiterProfile
+        if (!recruiterProfile || !recruiterProfile.isActive) {
+          return NextResponse.redirect(new URL('/auth/recruiter-approval', req.url))
+        }
+        return NextResponse.next()
+      }
+      
+      // Deny access for EMPLOYEES or other roles
+      return NextResponse.redirect(new URL('/', req.url))
+    }
+
+    // Handle dashboard redirects (after post-job to avoid conflicts)
     if (pathname.startsWith('/dashboard')) {
       if (!token) {
         return NextResponse.redirect(new URL('/auth/login', req.url))
@@ -20,11 +44,8 @@ export default withAuth(
 
       // Special handling for recruiters - check if they have active access
       if (token.role === 'RECRUITER') {
-        // Check if recruiter has active profile
         const recruiterProfile = token.recruiterProfile
-        
         if (!recruiterProfile || !recruiterProfile.isActive) {
-          // Redirect to approval request page if not active (unless they're on it already)
           if (pathname !== '/auth/recruiter-approval') {
             return NextResponse.redirect(new URL('/auth/recruiter-approval', req.url))
           }
@@ -48,7 +69,7 @@ export default withAuth(
       }
     }
 
-    // Handle recruiter-specific routes
+    // Handle recruiter-specific API routes
     if (pathname.startsWith('/api/recruiter')) {
       if (!token || token.role !== 'RECRUITER') {
         return NextResponse.json(
@@ -57,7 +78,6 @@ export default withAuth(
         )
       }
 
-      // Check if recruiter has active access for API routes
       const recruiterProfile = token.recruiterProfile
       if (!recruiterProfile || !recruiterProfile.isActive) {
         return NextResponse.json(
@@ -74,7 +94,6 @@ export default withAuth(
       }
       
       if (token.role !== 'RECRUITER') {
-        // Non-recruiters shouldn't access this page
         let dashboardUrl = '/dashboard/employee'
         if (token.role === 'EMPLOYER') {
           dashboardUrl = '/dashboard/employer'
@@ -82,7 +101,6 @@ export default withAuth(
         return NextResponse.redirect(new URL(dashboardUrl, req.url))
       }
 
-      // If recruiter is already active, redirect to dashboard
       const recruiterProfile = token.recruiterProfile
       if (recruiterProfile && recruiterProfile.isActive) {
         return NextResponse.redirect(new URL('/dashboard/recruiter', req.url))
@@ -95,7 +113,6 @@ export default withAuth(
         return NextResponse.redirect(new URL('/auth/role-selection', req.url))
       }
       
-      // Special handling for recruiters
       if (token.role === 'RECRUITER') {
         const recruiterProfile = token.recruiterProfile
         if (!recruiterProfile || !recruiterProfile.isActive) {
@@ -118,7 +135,6 @@ export default withAuth(
         return NextResponse.redirect(new URL('/auth/login', req.url))
       }
       if (token.role) {
-        // Special handling for recruiters
         if (token.role === 'RECRUITER') {
           const recruiterProfile = token.recruiterProfile
           if (!recruiterProfile || !recruiterProfile.isActive) {
@@ -132,23 +148,6 @@ export default withAuth(
           dashboardUrl = '/dashboard/employer'
         }
         return NextResponse.redirect(new URL(dashboardUrl, req.url))
-      }
-    }
-
-    // Protect post-job route (employers and active recruiters only)
-    if (pathname.startsWith('/post-job')) {
-      if (!token) {
-        return NextResponse.redirect(new URL('/auth/login', req.url))
-      }
-      
-      if (token.role === 'RECRUITER') {
-        // Check if recruiter has active access
-        const recruiterProfile = token.recruiterProfile
-        if (!recruiterProfile || !recruiterProfile.isActive) {
-          return NextResponse.redirect(new URL('/auth/recruiter-approval', req.url))
-        }
-      } else if (token.role !== 'EMPLOYER') {
-        return NextResponse.redirect(new URL('/', req.url))
       }
     }
 

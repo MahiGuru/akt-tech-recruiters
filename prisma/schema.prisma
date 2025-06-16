@@ -180,12 +180,15 @@ model Notification {
   @@map("notifications")
 }
 
+
 model Job {
   id          String   @id @default(cuid())
   title       String
   company     String
   location    String
-  type        JobType  @default(FULL_TIME)
+  type        JobType  @default(FULL_TIME)  // Keep for backward compatibility
+  jobTypes    String[] // New field for multiple job types
+  skills      String[] // New field for required skills
   salary      String
   description String
   requirements String[]
@@ -294,6 +297,9 @@ enum JobType {
   PART_TIME
   CONTRACT
   REMOTE
+  HYBRID
+  INTERNSHIP
+  FREELANCE
 }
 
 enum ApplicationStatus {

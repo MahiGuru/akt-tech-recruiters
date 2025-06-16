@@ -166,7 +166,7 @@ const NotificationService = () => {
 
   const playNotificationSound = () => {
     try {
-      const audio = new Audio('/notification.mp3')
+      const audio = new Audio('/notificationSound.mp3')
       audio.volume = 0.3
       audio.play().catch(() => {
         // Ignore errors - user might not have interacted with page yet

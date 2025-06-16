@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useForm } from 'react-hook-form'
@@ -16,7 +17,8 @@ import {
   Users,
   Clock,
   Star,
-  Target
+  Target,
+  ArrowLeft
 } from 'lucide-react'
 import RichTextEditor from '../components/RichTextEditor'
 
@@ -100,8 +102,8 @@ const MultiSelect = ({
 }
 
 export default function PostJob() {
+  const { data: session, status } = useSession()
   const router = useRouter()
-  const [user, setUser] = useState(null)
   const [requirements, setRequirements] = useState([])
   const [benefits, setBenefits] = useState([])
   const [newRequirement, setNewRequirement] = useState('')
@@ -109,8 +111,12 @@ export default function PostJob() {
   const [jobDescription, setJobDescription] = useState('')
   const [selectedSkills, setSelectedSkills] = useState([])
   const [selectedJobTypes, setSelectedJobTypes] = useState([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   const { register, handleSubmit, formState: { errors }, setValue } = useForm()
+
+  // Use session instead of localStorage
+  const user = session?.user
 
   // Skills options for multi-select
   const skillsOptions = [
@@ -148,21 +154,34 @@ export default function PostJob() {
   ]
 
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) {
+    if (status === 'loading') return
+    
+    if (!session) {
       router.push('/auth/login')
       return
     }
     
-    const parsedUser = JSON.parse(userData)
-    // Allow both EMPLOYER and RECRUITER to access
-    if (parsedUser.role !== 'EMPLOYER' && parsedUser.role !== 'RECRUITER') {
-      router.push('/dashboard/employee') // Redirects non-employers/recruiters
+    // Check if user has permission to post jobs
+    if (user.role === 'EMPLOYEE') {
+      toast.error('You need to be an employer or recruiter to post jobs')
+      router.push('/dashboard/employee')
       return
     }
-    
-    setUser(parsedUser)
-  }, [router])
+
+    // Special check for recruiters
+    if (user.role === 'RECRUITER') {
+      if (!user.recruiterProfile?.isActive) {
+        toast.error('Your recruiter account is pending approval')
+        router.push('/auth/recruiter-approval')
+        return
+      }
+    }
+
+    // Pre-fill company name for employers if available
+    if (user.role === 'EMPLOYER' && user.companyName) {
+      setValue('company', user.companyName)
+    }
+  }, [session, status, router, user, setValue])
 
   const addRequirement = () => {
     if (newRequirement.trim()) {
@@ -188,6 +207,8 @@ export default function PostJob() {
 
   const onSubmit = async (data) => {
     try {
+      setIsSubmitting(true)
+
       const jobData = {
         ...data,
         description: jobDescription,
@@ -195,7 +216,8 @@ export default function PostJob() {
         benefits,
         skills: selectedSkills,
         jobTypes: selectedJobTypes,
-        employerId: user.id // Use recruiter's user ID as employerId
+        employerId: user.id,
+        postedBy: user.role // Track whether posted by employer or recruiter
       }
 
       const response = await fetch('/api/jobs', {
@@ -206,17 +228,36 @@ export default function PostJob() {
 
       if (response.ok) {
         toast.success('Job posted successfully!')
-        router.push('/dashboard/employer')
+        
+        // Redirect based on user role
+        if (user.role === 'EMPLOYER') {
+          router.push('/dashboard/employer')
+        } else {
+          router.push('/dashboard/recruiter')
+        }
       } else {
         const error = await response.json()
         toast.error(error.message || 'Failed to post job')
       }
     } catch (error) {
-      toast.error('Something went wrong')
+      console.error('Job posting error:', error)
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  if (!user) {
+  const handleGoBack = () => {
+    if (user?.role === 'EMPLOYER') {
+      router.push('/dashboard/employer')
+    } else if (user?.role === 'RECRUITER') {
+      router.push('/dashboard/recruiter')
+    } else {
+      router.push('/')
+    }
+  }
+
+  if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="loading-spinner w-8 h-8 text-primary-600" />
@@ -224,10 +265,24 @@ export default function PostJob() {
     )
   }
 
+  if (!session || !user) {
+    return null
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-purple-50">
-      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Back Button */}
+        <div className="mb-6">
+          <button
+            onClick={handleGoBack}
+            className="btn btn-secondary btn-sm"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Dashboard
+          </button>
+        </div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -240,6 +295,11 @@ export default function PostJob() {
             </div>
             <h1 className="text-3xl font-bold text-secondary-900 mb-2">Post a New Job</h1>
             <p className="text-secondary-600">Find the perfect candidate for your team</p>
+            {user.role === 'RECRUITER' && (
+              <p className="text-sm text-blue-600 mt-2">
+                Posting as: {user.name} (Recruiter)
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -254,6 +314,7 @@ export default function PostJob() {
                   {...register('title', { required: 'Job title is required' })}
                   className={`input-field ${errors.title ? 'border-red-400 bg-red-50' : ''}`}
                   placeholder="e.g., Senior React Developer"
+                  disabled={isSubmitting}
                 />
                 {errors.title && (
                   <p className="form-error">{errors.title.message}</p>
@@ -270,6 +331,7 @@ export default function PostJob() {
                     {...register('company', { required: 'Company name is required' })}
                     className={`input-field ${errors.company ? 'border-red-400 bg-red-50' : ''}`}
                     placeholder="e.g., TechCorp Pvt Ltd"
+                    disabled={isSubmitting}
                   />
                   <Building className="input-icon" />
                 </div>
@@ -288,6 +350,7 @@ export default function PostJob() {
                     {...register('location', { required: 'Location is required' })}
                     className={`input-field ${errors.location ? 'border-red-400 bg-red-50' : ''}`}
                     placeholder="e.g., Bangalore, Karnataka"
+                    disabled={isSubmitting}
                   />
                   <MapPin className="input-icon" />
                 </div>
@@ -306,6 +369,7 @@ export default function PostJob() {
                     {...register('salary', { required: 'Salary range is required' })}
                     className={`input-field ${errors.salary ? 'border-red-400 bg-red-50' : ''}`}
                     placeholder="e.g., ₹8,00,000 - ₹12,00,000 per annum"
+                    disabled={isSubmitting}
                   />
                   <IndianRupeeIcon className="input-icon" />
                 </div>
@@ -375,11 +439,13 @@ export default function PostJob() {
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addRequirement())}
                     className="input-field flex-1"
                     placeholder="Add a requirement (e.g., 3+ years experience with React)"
+                    disabled={isSubmitting}
                   />
                   <button
                     type="button"
                     onClick={addRequirement}
                     className="btn btn-primary"
+                    disabled={isSubmitting}
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -400,6 +466,7 @@ export default function PostJob() {
                           type="button"
                           onClick={() => removeRequirement(index)}
                           className="text-red-500 hover:text-red-700 transition-colors"
+                          disabled={isSubmitting}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -422,11 +489,13 @@ export default function PostJob() {
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addBenefit())}
                     className="input-field flex-1"
                     placeholder="Add a benefit (e.g., Health insurance, Remote work)"
+                    disabled={isSubmitting}
                   />
                   <button
                     type="button"
                     onClick={addBenefit}
                     className="btn btn-primary"
+                    disabled={isSubmitting}
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -447,6 +516,7 @@ export default function PostJob() {
                           type="button"
                           onClick={() => removeBenefit(index)}
                           className="text-red-500 hover:text-red-700 transition-colors"
+                          disabled={isSubmitting}
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -461,18 +531,28 @@ export default function PostJob() {
             <div className="flex gap-4 pt-6">
               <button
                 type="button"
-                onClick={() => router.push('/dashboard/employer')}
+                onClick={handleGoBack}
                 className="btn btn-secondary flex-1"
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
               <button 
                 type="submit" 
                 className="btn btn-primary flex-1"
-                disabled={!jobDescription.trim() || selectedJobTypes.length === 0}
+                disabled={!jobDescription.trim() || selectedJobTypes.length === 0 || isSubmitting}
               >
-                <Briefcase className="w-5 h-5" />
-                Post Job
+                {isSubmitting ? (
+                  <>
+                    <div className="loading-spinner w-4 h-4" />
+                    Posting Job...
+                  </>
+                ) : (
+                  <>
+                    <Briefcase className="w-5 h-5" />
+                    Post Job
+                  </>
+                )}
               </button>
             </div>
           </form>

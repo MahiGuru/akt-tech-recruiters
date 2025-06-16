@@ -40,7 +40,8 @@ export default function Jobs() {
         const response = await fetch('/api/jobs');
         if (response.ok) {
           const data = await response.json();
-          setJobs(data);
+          console.log('Fetched jobs:', data);
+          setJobs(data.jobs || data);
         }
       } catch (error) {
         console.error('Error fetching jobs:', error);

@@ -1,7 +1,5 @@
-// components/RichTextEditor.js - TIPTAP VERSION (Replace your existing file)
 'use client'
 
-import React from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
@@ -11,34 +9,185 @@ import {
   Bold, 
   Italic, 
   Underline, 
-  List, 
+  Strikethrough,
+  List,
   ListOrdered,
-  Heading1,
-  Heading2,
+  Quote,
+  Undo,
+  Redo,
   AlignLeft,
   AlignCenter,
   AlignRight,
   Link as LinkIcon,
-  Quote,
-  Highlighter,
-  Undo,
-  Redo,
-  Type
+  Unlink
 } from 'lucide-react'
 
+const MenuBar = ({ editor }) => {
+  if (!editor) {
+    return null
+  }
+
+  const addLink = () => {
+    const url = window.prompt('Enter the URL')
+    if (url) {
+      editor.chain().focus().setLink({ href: url }).run()
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1 p-2 border-b border-gray-200 bg-gray-50 rounded-t-lg">
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        disabled={!editor.can().chain().focus().toggleBold().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('bold') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <Bold className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        disabled={!editor.can().chain().focus().toggleItalic().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('italic') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <Italic className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        disabled={!editor.can().chain().focus().toggleStrike().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('strike') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <Strikethrough className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-6 bg-gray-300 mx-1 self-center" />
+
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('bulletList') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <List className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('orderedList') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <ListOrdered className="w-4 h-4" />
+      </button>
+
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('blockquote') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <Quote className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-6 bg-gray-300 mx-1 self-center" />
+
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().setTextAlign('left').run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive({ textAlign: 'left' }) ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <AlignLeft className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().setTextAlign('center').run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive({ textAlign: 'center' }) ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <AlignCenter className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().setTextAlign('right').run()}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive({ textAlign: 'right' }) ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <AlignRight className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-6 bg-gray-300 mx-1 self-center" />
+
+      <button
+        type="button"
+        onClick={addLink}
+        className={`p-2 rounded hover:bg-gray-200 ${
+          editor.isActive('link') ? 'bg-primary-100 text-primary-600' : 'text-gray-600'
+        }`}
+      >
+        <LinkIcon className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().unsetLink().run()}
+        disabled={!editor.isActive('link')}
+        className="p-2 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-50"
+      >
+        <Unlink className="w-4 h-4" />
+      </button>
+
+      <div className="w-px h-6 bg-gray-300 mx-1 self-center" />
+
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().chain().focus().undo().run()}
+        className="p-2 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-50"
+      >
+        <Undo className="w-4 h-4" />
+      </button>
+      
+      <button
+        type="button"
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().chain().focus().redo().run()}
+        className="p-2 rounded hover:bg-gray-200 text-gray-600 disabled:opacity-50"
+      >
+        <Redo className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
 export default function RichTextEditor({ 
-  value = '', 
+  value, 
   onChange, 
-  placeholder = 'Start typing...',
-  className = '',
-  minHeight = '200px'
+  placeholder = "Start typing...",
+  minHeight = "200px",
+  className = ""
 }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Highlight.configure({
-        multicolor: true,
-      }),
+      Highlight,
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
@@ -46,312 +195,26 @@ export default function RichTextEditor({
         openOnClick: false,
       }),
     ],
-    content: value || '',
+    content: value,
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML()
-      onChange?.(html)
+      onChange(editor.getHTML())
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none p-4',
-        style: `min-height: ${minHeight}; direction: ltr; text-align: left;`,
-        dir: 'ltr',
+        class: `prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none p-4`,
+        style: `min-height: ${minHeight}`,
       },
     },
   })
 
-  React.useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '')
-    }
-  }, [value, editor])
-
-  if (!editor) {
-    return <div className="animate-pulse bg-gray-200 h-64 rounded-lg"></div>
-  }
-
-  const addLink = () => {
-    const url = window.prompt('Enter URL:')
-    if (url) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-    }
-  }
-
-  const ToolbarButton = ({ onClick, isActive, disabled, children, title }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      onMouseDown={(e) => e.preventDefault()}
-      className={`p-2 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-        isActive 
-          ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-          : 'hover:bg-gray-100 text-gray-600'
-      }`}
-    >
-      {children}
-    </button>
-  )
-
   return (
-    <div className={`border border-gray-300 rounded-lg overflow-hidden bg-white ${className}`} dir="ltr">
-      {/* Toolbar */}
-      <div className="border-b border-gray-200 p-2 bg-gray-50">
-        <div className="flex flex-wrap items-center gap-1" dir="ltr">
-          {/* Text Style */}
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setParagraph().run()}
-            isActive={editor.isActive('paragraph')}
-            title="Normal Text"
-          >
-            <Type className="w-4 h-4" />
-          </ToolbarButton>
-
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            isActive={editor.isActive('heading', { level: 1 })}
-            title="Heading 1"
-          >
-            <Heading1 className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            isActive={editor.isActive('heading', { level: 2 })}
-            title="Heading 2"
-          >
-            <Heading2 className="w-4 h-4" />
-          </ToolbarButton>
-
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-
-          {/* Text Formatting */}
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            isActive={editor.isActive('bold')}
-            title="Bold (Ctrl+B)"
-          >
-            <Bold className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            isActive={editor.isActive('italic')}
-            title="Italic (Ctrl+I)"
-          >
-            <Italic className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            isActive={editor.isActive('strike')}
-            title="Strikethrough"
-          >
-            <Underline className="w-4 h-4" />
-          </ToolbarButton>
-
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            isActive={editor.isActive('highlight')}
-            title="Highlight"
-          >
-            <Highlighter className="w-4 h-4" />
-          </ToolbarButton>
-
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-
-          {/* Lists & Quote */}
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            isActive={editor.isActive('bulletList')}
-            title="Bullet List"
-          >
-            <List className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            isActive={editor.isActive('orderedList')}
-            title="Numbered List"
-          >
-            <ListOrdered className="w-4 h-4" />
-          </ToolbarButton>
-
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            isActive={editor.isActive('blockquote')}
-            title="Blockquote"
-          >
-            <Quote className="w-4 h-4" />
-          </ToolbarButton>
-
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-
-          {/* Alignment */}
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-            isActive={editor.isActive({ textAlign: 'left' })}
-            title="Align Left"
-          >
-            <AlignLeft className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-            isActive={editor.isActive({ textAlign: 'center' })}
-            title="Align Center"
-          >
-            <AlignCenter className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-            isActive={editor.isActive({ textAlign: 'right' })}
-            title="Align Right"
-          >
-            <AlignRight className="w-4 h-4" />
-          </ToolbarButton>
-
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-
-          {/* Link */}
-          <ToolbarButton
-            onClick={addLink}
-            isActive={editor.isActive('link')}
-            title="Add Link"
-          >
-            <LinkIcon className="w-4 h-4" />
-          </ToolbarButton>
-
-          <div className="w-px h-6 bg-gray-300 mx-1" />
-
-          {/* Undo/Redo */}
-          <ToolbarButton
-            onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().chain().focus().undo().run()}
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo className="w-4 h-4" />
-          </ToolbarButton>
-          
-          <ToolbarButton
-            onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().chain().focus().redo().run()}
-            title="Redo (Ctrl+Shift+Z)"
-          >
-            <Redo className="w-4 h-4" />
-          </ToolbarButton>
-        </div>
-      </div>
-
-      {/* Editor Content */}
-      <div className="relative" dir="ltr">
-        <EditorContent 
-          editor={editor} 
-          className="tiptap-editor"
-          style={{ minHeight }}
-        />
-        
-        {/* Placeholder */}
-        {(!value || value.trim() === '' || editor.isEmpty) && (
-          <div 
-            className="absolute top-4 left-4 text-gray-400 pointer-events-none select-none"
-            style={{ 
-              zIndex: 1,
-              direction: 'ltr',
-              textAlign: 'left'
-            }}
-          >
-            {placeholder}
-          </div>
-        )}
-      </div>
-
-      <style jsx global>{`
-        .tiptap-editor .ProseMirror {
-          outline: none;
-          padding: 1rem;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-          content: '';
-          float: left;
-          color: transparent;
-          pointer-events: none;
-          height: 0;
-        }
-        
-        .tiptap-editor .ProseMirror h1 {
-          font-size: 1.875rem;
-          font-weight: 700;
-          margin: 1rem 0 0.5rem 0;
-          line-height: 1.2;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror h2 {
-          font-size: 1.5rem;
-          font-weight: 600;
-          margin: 0.875rem 0 0.5rem 0;
-          line-height: 1.3;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror p {
-          margin: 0.5rem 0;
-          line-height: 1.6;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror ul, 
-        .tiptap-editor .ProseMirror ol {
-          padding-left: 1.5rem !important;
-          padding-right: 0 !important;
-          margin: 0.75rem 0;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror li {
-          margin: 0.25rem 0;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror blockquote {
-          border-left: 4px solid #e5e7eb !important;
-          border-right: none !important;
-          padding-left: 1rem !important;
-          padding-right: 0 !important;
-          margin: 1rem 0;
-          font-style: italic;
-          color: #6b7280;
-          direction: ltr !important;
-          text-align: left !important;
-        }
-        
-        .tiptap-editor .ProseMirror a {
-          color: #2563eb;
-          text-decoration: underline;
-          direction: ltr !important;
-        }
-        
-        .tiptap-editor .ProseMirror mark {
-          background-color: #fef08a;
-          border-radius: 0.25rem;
-          padding: 0.125rem 0.25rem;
-        }
-        
-        .tiptap-editor .ProseMirror * {
-          direction: ltr !important;
-        }
-      `}</style>
+    <div className={`border border-gray-300 rounded-lg overflow-hidden ${className}`}>
+      <MenuBar editor={editor} />
+      <EditorContent 
+        editor={editor} 
+        className="min-h-[200px] max-h-[500px] overflow-y-auto"
+        placeholder={placeholder}
+      />
     </div>
   )
 }
