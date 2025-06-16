@@ -1,6 +1,6 @@
-// app/(client)/dashboard/recruiter/page.js (Enhanced Version)
+// app/(client)/dashboard/recruiter/page.js (Fixed Browser Tab Reloading - Final)
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,6 +39,17 @@ import {
 export default function RecruiterDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  
+  // Single source of truth for initialization
+  const dashboardState = useRef({
+    isInitialized: false,
+    currentUserId: null,
+    lastInitTime: 0,
+    isLoading: false
+  });
+  
+  const dataCache = useRef({});
+  const intervalRefs = useRef([]);
 
   // Core state
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -61,6 +72,7 @@ export default function RecruiterDashboard() {
   const [experienceFilter, setExperienceFilter] = useState("");
   const [showNotificationsPanel, setShowNotificationsPanel] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [tabLoading, setTabLoading] = useState({});
 
   // Enhanced UI state
   const [recentActivity, setRecentActivity] = useState([]);
@@ -70,138 +82,386 @@ export default function RecruiterDashboard() {
   const [showQuickStatusModal, setShowQuickStatusModal] = useState(false);
   const [selectedCandidateForStatus, setSelectedCandidateForStatus] = useState(null);
 
-  const notificationsHook = useNotifications(stats.unreadNotifications, setStats);
+  // Create a stable notifications hook that won't cause re-renders
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const user = session?.user;
-  const isAdmin = user?.recruiterProfile?.recruiterType === "ADMIN";
+  const userId = user?.id;
+  const isAdmin = useMemo(() => user?.recruiterProfile?.recruiterType === "ADMIN", [user]);
 
   // Candidate status options
-  const candidateStatuses = [
+  const candidateStatuses = useMemo(() => [
     { value: 'ACTIVE', label: 'Active', color: 'bg-green-100 text-green-800 border-green-200', icon: 'UserCheck', description: 'Available for new opportunities' },
     { value: 'PLACED', label: 'Placed', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: 'Target', description: 'Successfully placed in a position' },
     { value: 'INACTIVE', label: 'Inactive', color: 'bg-gray-100 text-gray-800 border-gray-200', icon: 'UserMinus', description: 'Not currently seeking opportunities' },
     { value: 'DO_NOT_CONTACT', label: 'Do Not Contact', color: 'bg-red-100 text-red-800 border-red-200', icon: 'Shield', description: 'Should not be contacted' }
-  ];
+  ], []);
 
-  useEffect(() => {
-    if (status === "loading") return;
-    if (!session) {
-      router.push("/auth/login");
-      return;
-    }
-    if (session.user.role !== "RECRUITER") {
-      router.push("/dashboard/employee");
-      return;
-    }
-    fetchDashboardData();
-    notificationsHook.startNotificationPolling();
-    
-    const dashboardRefreshInterval = setInterval(fetchDashboardData, 10 * 60 * 1000);
-    return () => {
-      clearInterval(dashboardRefreshInterval);
-      notificationsHook.cleanupNotificationPolling();
-    };
-  }, [session, status, router]);
+  // Stable API functions that won't change reference
+  const apiFunctions = useMemo(() => ({
+    fetchResumes: async (force = false) => {
+      const cacheKey = 'resumes';
+      const cacheTime = 5 * 60 * 1000;
+      
+      if (!force && dataCache.current[cacheKey] && 
+          Date.now() - dataCache.current[`${cacheKey}Timestamp`] < cacheTime) {
+        return dataCache.current[cacheKey];
+      }
 
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Fetch resumes
-      const resumesResponse = await fetch("/api/recruiter/resumes");
-      if (resumesResponse.ok) {
-        const resumesData = await resumesResponse.json();
-        setResumes(resumesData.resumes || resumesData);
+      try {
+        const response = await fetch("/api/recruiter/resumes");
+        if (response.ok) {
+          const data = await response.json();
+          const resumesData = data.resumes || data;
+          dataCache.current[cacheKey] = resumesData;
+          dataCache.current[`${cacheKey}Timestamp`] = Date.now();
+          setResumes(resumesData);
+          return resumesData;
+        }
+      } catch (error) {
+        console.error("Error fetching resumes:", error);
       }
+      return [];
+    },
+
+    fetchCandidates: async (force = false) => {
+      const cacheKey = 'candidates';
+      const cacheTime = 2 * 60 * 1000;
       
-      // Fetch candidates
-      const candidatesResponse = await fetch("/api/recruiter/candidates");
-      if (candidatesResponse.ok) {
-        const candidatesData = await candidatesResponse.json();
-        const candidatesList = candidatesData.candidates || candidatesData;
-        setCandidates(candidatesList);
-        
-        const statusDistribution = candidatesList.reduce((acc, candidate) => {
-          acc[candidate.status] = (acc[candidate.status] || 0) + 1;
-          return acc;
-        }, {});
-        setStats(prevStats => ({ ...prevStats, candidatesByStatus: statusDistribution }));
+      if (!force && dataCache.current[cacheKey] && 
+          Date.now() - dataCache.current[`${cacheKey}Timestamp`] < cacheTime) {
+        return dataCache.current[cacheKey];
       }
-      
-      // Fetch resume analytics
-      const analyticsResponse = await fetch("/api/recruiter/resumes/analytics");
-      if (analyticsResponse.ok) {
-        const analyticsData = await analyticsResponse.json();
-        setResumeAnalytics(analyticsData);
-        setStats(prevStats => ({
-          ...prevStats,
-          totalResumes: analyticsData.summary?.totalResumes || 0,
-          mappedResumes: analyticsData.summary?.mappedResumes || 0,
-          unmappedResumes: analyticsData.summary?.unmappedUserResumes || 0,
-          candidatesWithResumes: analyticsData.summary?.candidatesWithResumes || 0,
-          candidatesWithoutResumes: analyticsData.summary?.candidatesWithoutResumes || 0
-        }));
+
+      try {
+        const response = await fetch("/api/recruiter/candidates");
+        if (response.ok) {
+          const data = await response.json();
+          const candidatesData = data.candidates || data;
+          dataCache.current[cacheKey] = candidatesData;
+          dataCache.current[`${cacheKey}Timestamp`] = Date.now();
+          setCandidates(candidatesData);
+          
+          const statusDistribution = candidatesData.reduce((acc, candidate) => {
+            acc[candidate.status] = (acc[candidate.status] || 0) + 1;
+            return acc;
+          }, {});
+          setStats(prev => ({ ...prev, candidatesByStatus: statusDistribution }));
+          return candidatesData;
+        }
+      } catch (error) {
+        console.error("Error fetching candidates:", error);
       }
+      return [];
+    },
+
+    fetchAnalytics: async (force = false) => {
+      const cacheKey = 'analytics';
+      const cacheTime = 10 * 60 * 1000;
       
-      // Fetch team members and performance (if admin)
-      if (isAdmin) {
-        const teamResponse = await fetch("/api/recruiter/team");
-        if (teamResponse.ok) {
-          const teamData = await teamResponse.json();
+      if (!force && dataCache.current[cacheKey] && 
+          Date.now() - dataCache.current[`${cacheKey}Timestamp`] < cacheTime) {
+        return dataCache.current[cacheKey];
+      }
+
+      try {
+        const response = await fetch("/api/recruiter/resumes/analytics");
+        if (response.ok) {
+          const analyticsData = await response.json();
+          dataCache.current[cacheKey] = analyticsData;
+          dataCache.current[`${cacheKey}Timestamp`] = Date.now();
+          setResumeAnalytics(analyticsData);
+          setStats(prev => ({
+            ...prev,
+            totalResumes: analyticsData.summary?.totalResumes || 0,
+            mappedResumes: analyticsData.summary?.mappedResumes || 0,
+            unmappedResumes: analyticsData.summary?.unmappedUserResumes || 0,
+            candidatesWithResumes: analyticsData.summary?.candidatesWithResumes || 0,
+            candidatesWithoutResumes: analyticsData.summary?.candidatesWithoutResumes || 0
+          }));
+          return analyticsData;
+        }
+      } catch (error) {
+        console.error("Error fetching analytics:", error);
+      }
+      return {};
+    },
+
+    fetchTeamData: async (force = false) => {
+      if (!isAdmin) return {};
+      
+      const cacheKey = 'team';
+      const cacheTime = 5 * 60 * 1000;
+      
+      if (!force && dataCache.current[cacheKey] && 
+          Date.now() - dataCache.current[`${cacheKey}Timestamp`] < cacheTime) {
+        return dataCache.current[cacheKey];
+      }
+
+      try {
+        const response = await fetch("/api/recruiter/team");
+        if (response.ok) {
+          const teamData = await response.json();
+          dataCache.current[cacheKey] = teamData;
+          dataCache.current[`${cacheKey}Timestamp`] = Date.now();
           setTeamMembers(teamData.teamMembers || teamData);
           if (teamData.stats) {
-            setStats(prevStats => ({
-              ...prevStats,
+            setStats(prev => ({
+              ...prev,
               teamSize: teamData.stats.total || (teamData.teamMembers?.length ?? 0),
             }));
           }
+          return teamData;
         }
+      } catch (error) {
+        console.error("Error fetching team data:", error);
+      }
+      return {};
+    },
 
-        // Fetch recent activity for admin
-        const performanceResponse = await fetch("/api/recruiter/admin/performance");
-        if (performanceResponse.ok) {
-          const performanceData = await performanceResponse.json();
+    fetchPerformanceData: async (force = false) => {
+      if (!isAdmin) return {};
+      
+      const cacheKey = 'performance';
+      const cacheTime = 10 * 60 * 1000;
+      
+      if (!force && dataCache.current[cacheKey] && 
+          Date.now() - dataCache.current[`${cacheKey}Timestamp`] < cacheTime) {
+        return dataCache.current[cacheKey];
+      }
+
+      try {
+        const response = await fetch("/api/recruiter/admin/performance");
+        if (response.ok) {
+          const performanceData = await response.json();
+          dataCache.current[cacheKey] = performanceData;
+          dataCache.current[`${cacheKey}Timestamp`] = Date.now();
           setRecentActivity(performanceData.activity || []);
           setQuickStats(performanceData.metrics || {});
+          return performanceData;
         }
+      } catch (error) {
+        console.error("Error fetching performance data:", error);
       }
+      return {};
+    },
+
+    fetchNotifications: async () => {
+      try {
+        const response = await fetch("/api/recruiter/notifications");
+        if (response.ok) {
+          const data = await response.json();
+          const notificationsList = data.notifications || data;
+          setNotifications(notificationsList);
+          
+          const unread = data.pagination?.unread || notificationsList.filter(n => !n.isRead).length;
+          setUnreadCount(unread);
+          setStats(prev => ({ ...prev, unreadNotifications: unread }));
+        }
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+      }
+    }
+  }), [isAdmin]);
+
+  // Clear all intervals
+  const clearAllIntervals = useCallback(() => {
+    intervalRefs.current.forEach(interval => {
+      if (interval) clearInterval(interval);
+    });
+    intervalRefs.current = [];
+  }, []);
+
+  // Initialize dashboard data ONCE
+  const initializeDashboard = useCallback(async () => {
+    // Prevent multiple initializations
+    if (dashboardState.current.isLoading || 
+        dashboardState.current.isInitialized ||
+        dashboardState.current.currentUserId === userId) {
+      return;
+    }
+
+    dashboardState.current.isLoading = true;
+    dashboardState.current.currentUserId = userId;
+    
+    try {
+      setIsLoading(true);
       
-      await notificationsHook.fetchNotifications();
+      // Clear any existing intervals
+      clearAllIntervals();
+      
+      // Load all data
+      await Promise.all([
+        apiFunctions.fetchCandidates(true),
+        apiFunctions.fetchAnalytics(true),
+        apiFunctions.fetchNotifications(),
+        isAdmin ? apiFunctions.fetchTeamData(true) : Promise.resolve(),
+        isAdmin ? apiFunctions.fetchPerformanceData(true) : Promise.resolve()
+      ]);
+      
+      // Setup minimal polling only for notifications
+      const notificationInterval = setInterval(apiFunctions.fetchNotifications, 2 * 60 * 1000);
+      intervalRefs.current.push(notificationInterval);
+      
+      dashboardState.current.isInitialized = true;
+      dashboardState.current.lastInitTime = Date.now();
     } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+      console.error("Error initializing dashboard:", error);
       toast.error("Failed to load dashboard data");
     } finally {
       setIsLoading(false);
+      dashboardState.current.isLoading = false;
     }
-  };
+  }, [userId, isAdmin, apiFunctions, clearAllIntervals]);
 
-  // Quick status update logic
-  const handleQuickStatusUpdate = async (candidateId, newStatus, candidateName) => {
+  // Handle tab changes
+  const handleTabChange = useCallback((newTab) => {
+    setActiveTab(newTab);
+    
+    // Load data if needed (but don't force reload)
+    const loadData = async () => {
+      setTabLoading(prev => ({ ...prev, [newTab]: true }));
+      
+      try {
+        switch (newTab) {
+          case 'dashboard':
+            await apiFunctions.fetchCandidates();
+            break;
+          case 'candidates':
+            await apiFunctions.fetchCandidates();
+            break;
+          case 'resumes':
+          case 'bulk-upload':
+          case 'resume-mapping':
+            await Promise.all([apiFunctions.fetchResumes(), apiFunctions.fetchCandidates()]);
+            break;
+          case 'team':
+          case 'analytics':
+            if (isAdmin) {
+              await Promise.all([apiFunctions.fetchTeamData(), apiFunctions.fetchPerformanceData()]);
+            }
+            break;
+        }
+      } catch (error) {
+        console.error(`Error loading ${newTab} data:`, error);
+      } finally {
+        setTabLoading(prev => ({ ...prev, [newTab]: false }));
+      }
+    };
+
+    loadData();
+  }, [apiFunctions, isAdmin]);
+
+  // Simple notification functions
+  const markNotificationAsRead = useCallback(async (notificationId) => {
+    try {
+      const response = await fetch("/api/recruiter/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId, isRead: true }),
+      });
+      if (response.ok) {
+        setNotifications(prev => 
+          prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+        );
+        setUnreadCount(prev => Math.max(0, prev - 1));
+        setStats(prev => ({ ...prev, unreadNotifications: Math.max(0, prev.unreadNotifications - 1) }));
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  }, []);
+
+  const markAllNotificationsAsRead = useCallback(async () => {
+    try {
+      const response = await fetch("/api/recruiter/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (response.ok) {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        setUnreadCount(0);
+        setStats(prev => ({ ...prev, unreadNotifications: 0 }));
+        toast.success("All notifications marked as read");
+      }
+    } catch (error) {
+      toast.error("Failed to update notifications");
+    }
+  }, []);
+
+  // Quick status update
+  const handleQuickStatusUpdate = useCallback(async (candidateId, newStatus, candidateName) => {
     try {
       const response = await fetch('/api/recruiter/candidates', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ candidateId, status: newStatus })
       });
+      
       if (response.ok) {
-        notificationsHook.toastSuccess(`${candidateName}'s status updated to ${candidateStatuses.find(s => s.value === newStatus)?.label || newStatus}`);
-        await fetchDashboardData();
+        // Invalidate candidates cache
+        delete dataCache.current.candidates;
+        delete dataCache.current.candidatesTimestamp;
+        
+        toast.success(`${candidateName}'s status updated to ${candidateStatuses.find(s => s.value === newStatus)?.label || newStatus}`);
+        await apiFunctions.fetchCandidates(true);
         setShowQuickStatusModal(false);
         setSelectedCandidateForStatus(null);
       } else {
         const error = await response.json();
-        notificationsHook.toastError(error.message || 'Failed to update candidate status');
+        toast.error(error.message || 'Failed to update candidate status');
       }
     } catch (error) {
       console.error('Status update error:', error);
-      notificationsHook.toastError('Something went wrong while updating status');
+      toast.error('Something went wrong while updating status');
     }
-  };
+  }, [candidateStatuses, apiFunctions]);
 
-  // Regular Recruiter Dashboard Component
-  const RegularRecruiterDashboard = () => (
+  // Handle upload success
+  const handleUploadSuccess = useCallback(async () => {
+    delete dataCache.current.resumes;
+    delete dataCache.current.resumesTimestamp;
+    delete dataCache.current.analytics;
+    delete dataCache.current.analyticsTimestamp;
+    
+    await Promise.all([apiFunctions.fetchResumes(true), apiFunctions.fetchAnalytics(true)]);
+    toast.success("Upload successful!");
+  }, [apiFunctions]);
+
+  // Handle mapping update
+  const handleMappingUpdate = useCallback(async () => {
+    delete dataCache.current.resumes;
+    delete dataCache.current.resumesTimestamp;
+    delete dataCache.current.candidates;
+    delete dataCache.current.candidatesTimestamp;
+    delete dataCache.current.analytics;
+    delete dataCache.current.analyticsTimestamp;
+    
+    await Promise.all([
+      apiFunctions.fetchResumes(true), 
+      apiFunctions.fetchCandidates(true), 
+      apiFunctions.fetchAnalytics(true)
+    ]);
+  }, [apiFunctions]);
+
+  // Filtered resumes
+  const filteredResumes = useMemo(() => {
+    return resumes.filter((resume) => {
+      const matchesSearch =
+        resume.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resume.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resume.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resume.candidate?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resume.candidate?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesExperience = !experienceFilter || resume.experienceLevel === experienceFilter;
+      return matchesSearch && matchesExperience;
+    });
+  }, [resumes, searchTerm, experienceFilter]);
+
+  // Regular Dashboard Component
+  const RegularRecruiterDashboard = useMemo(() => (
     <div className="space-y-8">
-      {/* Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -210,7 +470,7 @@ export default function RecruiterDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.name}!</h1>
-            <p className="text-blue-100 text-lg">Here's your recruiting overview for today</p>
+            <p className="text-blue-100 text-lg">Heres your recruiting overview for today</p>
           </div>
           <div className="bg-white bg-opacity-20 rounded-xl p-4">
             <Activity className="w-12 h-12 text-white" />
@@ -218,94 +478,63 @@ export default function RecruiterDashboard() {
         </div>
       </motion.div>
 
-      {/* Quick Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-          onClick={() => setActiveTab('candidates')}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Your Candidates</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{candidates.length}</p>
-              <p className="text-green-600 text-sm mt-1">
-                {candidates.filter(c => c.status === 'ACTIVE').length} active
-              </p>
+        {[
+          {
+            title: "Your Candidates",
+            value: candidates.length,
+            subtitle: `${candidates.filter(c => c.status === 'ACTIVE').length} active`,
+            icon: Users,
+            color: "blue",
+            onClick: () => handleTabChange('candidates')
+          },
+          {
+            title: "Resume Database",
+            value: stats.totalResumes,
+            subtitle: `${stats.mappedResumes} mapped`,
+            icon: FileText,
+            color: "green",
+            onClick: () => handleTabChange('resumes')
+          },
+          {
+            title: "Placed This Month",
+            value: candidates.filter(c => c.status === 'PLACED').length,
+            subtitle: "Great progress!",
+            icon: Target,
+            color: "purple"
+          },
+          {
+            title: "Success Rate",
+            value: candidates.length > 0 
+              ? `${Math.round((candidates.filter(c => c.status === 'PLACED').length / candidates.length) * 100)}%`
+              : "0%",
+            subtitle: "Keep it up!",
+            icon: Award,
+            color: "orange"
+          }
+        ].map((card, index) => (
+          <motion.div
+            key={card.title}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 * (index + 1) }}
+            className={`bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow ${card.onClick ? 'cursor-pointer' : ''}`}
+            onClick={card.onClick}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">{card.title}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
+                <p className={`text-${card.color}-600 text-sm mt-1`}>{card.subtitle}</p>
+              </div>
+              <div className={`bg-${card.color}-100 rounded-lg p-3`}>
+                <card.icon className={`w-6 h-6 text-${card.color}-600`} />
+              </div>
             </div>
-            <div className="bg-blue-100 rounded-lg p-3">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-          onClick={() => setActiveTab('resumes')}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Resume Database</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalResumes}</p>
-              <p className="text-blue-600 text-sm mt-1">
-                {stats.mappedResumes} mapped
-              </p>
-            </div>
-            <div className="bg-green-100 rounded-lg p-3">
-              <FileText className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Placed This Month</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {candidates.filter(c => c.status === 'PLACED').length}
-              </p>
-              <p className="text-purple-600 text-sm mt-1">Great progress!</p>
-            </div>
-            <div className="bg-purple-100 rounded-lg p-3">
-              <Target className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm font-medium">Success Rate</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">
-                {candidates.length > 0 
-                  ? Math.round((candidates.filter(c => c.status === 'PLACED').length / candidates.length) * 100)
-                  : 0}%
-              </p>
-              <p className="text-orange-600 text-sm mt-1">Keep it up!</p>
-            </div>
-            <div className="bg-orange-100 rounded-lg p-3">
-              <Award className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        ))}
       </div>
 
-      {/* Recent Candidates */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -315,7 +544,7 @@ export default function RecruiterDashboard() {
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Recent Candidates</h3>
           <button
-            onClick={() => setActiveTab('candidates')}
+            onClick={() => handleTabChange('candidates')}
             className="text-blue-600 hover:text-blue-700 font-medium text-sm"
           >
             View All →
@@ -328,7 +557,7 @@ export default function RecruiterDashboard() {
             <h4 className="text-lg font-medium text-gray-900 mb-2">No candidates yet</h4>
             <p className="text-gray-600 mb-4">Start by adding your first candidate</p>
             <button
-              onClick={() => setActiveTab('candidates')}
+              onClick={() => handleTabChange('candidates')}
               className="btn btn-primary"
             >
               <Users className="w-4 h-4" />
@@ -370,7 +599,42 @@ export default function RecruiterDashboard() {
         )}
       </motion.div>
     </div>
-  );
+  ), [candidates, stats, user, candidateStatuses, handleTabChange]);
+
+  // Main effect - ONLY run when absolutely necessary
+  useEffect(() => {
+    // Don't do anything while loading
+    if (status === "loading") return;
+    
+    // Handle authentication
+    if (status === "unauthenticated") {            // definitely logged-out
+      router.replace("/auth/login");
+      return;
+    }
+    
+    if (session.user.role !== "RECRUITER") {
+      router.push("/dashboard/employee");
+      return;
+    }
+    
+    if (!dashboardState.current.isInitialized) {
+      initializeDashboard();                       // runs only once per user
+    }
+
+    // Only initialize if we haven't already for this user
+    if (userId && !dashboardState.current.isInitialized && 
+        dashboardState.current.currentUserId !== userId) {
+      initializeDashboard();
+    }
+    
+    return () => {
+      // Only cleanup if we're actually changing users
+      if (dashboardState.current.currentUserId !== userId) {
+        clearAllIntervals();
+        dashboardState.current.isInitialized = false;
+      }
+    };
+  }, [status, session?.user?.role, userId, initializeDashboard]); // Minimal dependencies
 
   if (status === "loading" || isLoading) {
     return (
@@ -392,58 +656,71 @@ export default function RecruiterDashboard() {
     return null;
   }
 
-  const filteredResumes = resumes.filter((resume) => {
-    const matchesSearch =
-      resume.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.user?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.candidate?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.candidate?.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesExperience = !experienceFilter || resume.experienceLevel === experienceFilter;
-    return matchesSearch && matchesExperience;
-  });
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Enhanced Stats */}
         <DashboardStats stats={stats} candidates={candidates} isAdmin={isAdmin} />
         
-        {/* Enhanced Tab Navigation */}
         <DashboardTabs
           activeTab={activeTab}
-          setActiveTab={setActiveTab}
+          setActiveTab={handleTabChange}
           isAdmin={isAdmin}
         />
 
-        {/* Tab Content with Enhanced Animations */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6"
-          >
-            {activeTab === "dashboard" && (
-              isAdmin ? <AdminDashboard /> : <RegularRecruiterDashboard />
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 min-h-[600px]">
+          <div className={`p-6 ${activeTab === "dashboard" ? "block" : "hidden"}`}>
+            {tabLoading.dashboard ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="loading-spinner w-8 h-8 text-primary-600" />
+              </div>
+            ) : (
+              isAdmin ? <AdminDashboard /> : RegularRecruiterDashboard
             )}
-            {activeTab === "candidates" && <CandidateManagement />}
-            {activeTab === "bulk-upload" && (
+          </div>
+
+          <div className={`p-6 ${activeTab === "candidates" ? "block" : "hidden"}`}>
+            {tabLoading.candidates ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="loading-spinner w-8 h-8 text-primary-600" />
+              </div>
+            ) : (
+              <CandidateManagement />
+            )}
+          </div>
+
+          <div className={`p-6 ${activeTab === "bulk-upload" ? "block" : "hidden"}`}>
+            {tabLoading["bulk-upload"] ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="loading-spinner w-8 h-8 text-primary-600" />
+              </div>
+            ) : (
               <BulkResumeUpload
                 candidates={candidates}
-                onUploadSuccess={fetchDashboardData}
-                onUploadError={notificationsHook.toastError}
+                onUploadSuccess={handleUploadSuccess}
+                onUploadError={(msg) => toast.error(msg)}
               />
             )}
-            {activeTab === "resume-mapping" && (
+          </div>
+
+          <div className={`p-6 ${activeTab === "resume-mapping" ? "block" : "hidden"}`}>
+            {tabLoading["resume-mapping"] ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="loading-spinner w-8 h-8 text-primary-600" />
+              </div>
+            ) : (
               <ResumeMappingManager
                 candidates={candidates}
-                onMappingUpdate={fetchDashboardData}
+                onMappingUpdate={handleMappingUpdate}
               />
             )}
-            {activeTab === "resumes" && (
+          </div>
+
+          <div className={`p-6 ${activeTab === "resumes" ? "block" : "hidden"}`}>
+            {tabLoading.resumes ? (
+              <div className="flex items-center justify-center h-96">
+                <div className="loading-spinner w-8 h-8 text-primary-600" />
+              </div>
+            ) : (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold text-gray-900">Resume Database</h2>
@@ -451,16 +728,36 @@ export default function RecruiterDashboard() {
                     {filteredResumes.length} of {resumes.length} resumes
                   </div>
                 </div>
-                {/* Add your resume listing component here */}
               </div>
             )}
-            {activeTab === "team" && isAdmin && <TeamManagement />}
-            {activeTab === "analytics" && isAdmin && <ResumeAnalyticsDashboard />}
-          </motion.div>
-        </AnimatePresence>
+          </div>
+
+          {isAdmin && (
+            <>
+              <div className={`p-6 ${activeTab === "team" ? "block" : "hidden"}`}>
+                {tabLoading.team ? (
+                  <div className="flex items-center justify-center h-96">
+                    <div className="loading-spinner w-8 h-8 text-primary-600" />
+                  </div>
+                ) : (
+                  <TeamManagement />
+                )}
+              </div>
+
+              <div className={`p-6 ${activeTab === "analytics" ? "block" : "hidden"}`}>
+                {tabLoading.analytics ? (
+                  <div className="flex items-center justify-center h-96">
+                    <div className="loading-spinner w-8 h-8 text-primary-600" />
+                  </div>
+                ) : (
+                  <ResumeAnalyticsDashboard />
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Enhanced Modals */}
       <QuickStatusModal
         open={showQuickStatusModal}
         candidate={selectedCandidateForStatus}
@@ -472,15 +769,34 @@ export default function RecruiterDashboard() {
         onStatusChange={handleQuickStatusUpdate}
       />
 
-      {/* Enhanced Notifications */}
-      {notificationsHook.renderFloatingButton(() => setShowNotificationsPanel(true))}
+      {/* Simple notifications */}
+      {unreadCount > 0 && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="fixed bottom-6 right-6 z-50"
+        >
+          <button
+            onClick={() => setShowNotificationsPanel(true)}
+            className="relative bg-primary-600 hover:bg-primary-700 text-white p-4 rounded-full shadow-lg"
+          >
+            <span className="sr-only">Notifications</span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+        </motion.div>
+      )}
+
       <NotificationsPanel
         open={showNotificationsPanel}
         onClose={() => setShowNotificationsPanel(false)}
-        notifications={notificationsHook.notifications}
-        unreadCount={notificationsHook.unreadCount}
-        markNotificationAsRead={notificationsHook.markNotificationAsRead}
-        markAllNotificationsAsRead={notificationsHook.markAllNotificationsAsRead}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        markNotificationAsRead={markNotificationAsRead}
+        markAllNotificationsAsRead={markAllNotificationsAsRead}
       />
     </div>
   );

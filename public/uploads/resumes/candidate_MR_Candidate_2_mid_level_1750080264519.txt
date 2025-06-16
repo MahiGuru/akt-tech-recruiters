@@ -1,0 +1,580 @@
+# Project Setup
+1. Create a new Next.js app with TypeScript, Tailwind CSS, and Prisma.
+2. Set up PostgreSQL with Prisma ORM.
+3. Create pages with App Router and responsive components.
+
+## Directory Structure
+```
+recruiter-portal/
+├── app/
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── page.tsx
+│   ├── dashboard/
+│   │   └── page.tsx
+│   ├── employee/
+│   │   └── page.tsx
+│   ├── highlights/
+│   │   └── page.tsx
+│   ├── jobs/
+│   │   └── page.tsx
+│   ├── interviewers/
+│   │   └── page.tsx
+├── components/
+│   ├── DashboardCard.tsx
+│   ├── ResumeForm.tsx
+│   ├── HighlightForm.tsx
+│   ├── JobPostingForm.tsx
+│   ├── InterviewerCard.tsx
+├── prisma/
+│   ├── schema.prisma
+├── lib/
+│   ├── prisma.ts
+├── public/
+├── package.json
+├── tsconfig.json
+├── next.config.mjs
+```
+
+## 1. Setup Files
+### package.json
+```json
+{
+  "name": "recruiter-portal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.10.2",
+    "next": "14.2.3",
+    "react": "^18",
+    "react-dom": "^18",
+    "tailwindcss": "^3.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "prisma": "^5.10.2",
+    "typescript": "^5"
+  }
+}
+```
+
+### next.config.mjs
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {};
+
+export default nextConfig;
+```
+
+### tsconfig.json
+```json
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundled",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+```
+
+### app/globals.css
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+```
+
+## 2. Database Setup
+### prisma/schema.prisma
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Employer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  resume    Json?
+  createdAt DateTime @default(now())
+}
+
+model Interviewer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+model Job {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  employerId  Int
+  createdAt   DateTime @default(now())
+}
+
+model Highlight {
+  id         Int      @id @default(autoincrement())
+  employeeId Int
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model Appointment {
+  id           Int      @id @default(autoincrement())
+  interviewerId Int
+  employeeId   Int
+  date         DateTime
+  createdAt    DateTime @default(now())
+}
+```
+
+### lib/prisma.ts
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export default prisma;
+```
+
+## 3. Root Layout and Home Page
+### app/layout.tsx
+```typescript
+import type { Metadata } from 'next';
+import './globals.css';
+
+export const metadata: Metadata = {
+  title: 'Recruiter Portal',
+  description: 'A modern recruiter portal for managing jobs and interviews',
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body className="bg-gray-100">
+        <nav className="bg-white shadow p-4">
+          <div className="max-w-7xl mx-auto flex justify-between">
+            <h1 className="text-xl font-bold">Recruiter Portal</h1>
+            <div className="space-x-4">
+              <a href="/dashboard" className="text-blue-600 hover:underline">Dashboard</a>
+              <a href="/employee" className="text-blue-600 hover:underline">Update Resume</a>
+              <a href="/highlights" className="text-blue-600 hover:underline">Highlights</a>
+              <a href="/jobs" className="text-blue-600 hover:underline">Post Jobs</a>
+              <a href="/interviewers" className="text-blue-600 hover:underline">Interviewers</a>
+            </div>
+          </div>
+        </nav>
+        <main className="max-w-7xl mx-auto p-4">{children}</main>
+      </body>
+    </html>
+  );
+}
+```
+
+### app/page.tsx
+```typescript
+export default function Home() {
+  return (
+    <div className="text-center py-10">
+      <h1 className="text-4xl font-bold mb-4">Welcome to Recruiter Portal</h1>
+      <p className="text-lg">Manage employees, jobs, and interviews efficiently.</p>
+      <a href="/dashboard" className="mt-4 inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+        Go to Dashboard
+      </a>
+    </div>
+  );
+}
+```
+
+## 4. Components
+### components/DashboardCard.tsx
+```typescript
+import React from 'react';
+
+interface DashboardCardProps {
+  title: string;
+  count: number;
+}
+
+export default function DashboardCard({ title, count }: DashboardCardProps) {
+  return (
+    <div className="bg-white shadow rounded-lg p-6">
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="text-3xl font-bold text-blue-600">{count}</p>
+    </div>
+  );
+}
+```
+
+### components/ResumeForm.tsx
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function ResumeForm() {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    experience: '',
+    education: '',
+    skills: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // API call to save resume
+    console.log(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow max-w-2xl mx-auto">
+      <div>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700">Name</label>
+        <input
+          type="text"
+          id="name"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+      <div>
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+        <input
+          type="email"
+          id="email"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+      <div>
+        <label htmlFor="experience" className="block text-sm font-medium text-gray-700">Experience</label>
+        <textarea
+          id="experience"
+          value={formData.experience}
+          onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          rows={4}
+        />
+      </div>
+      <div>
+        <label htmlFor="education" className="block text-sm font-medium text-gray-700">Education</label>
+        <textarea
+          id="education"
+          value={formData.education}
+          onChange={(e) => setFormData({ ...formData, education: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          rows={4}
+        />
+      </div>
+      <div>
+        <label htmlFor="skills" className="block text-sm font-medium text-gray-700">Skills</label>
+        <input
+          type="text"
+          id="skills"
+          value={formData.skills}
+          onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+      <button
+        type="submit"
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        Save Resume
+      </button>
+    </form>
+  );
+}
+```
+
+### components/HighlightForm.tsx
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function HighlightForm() {
+  const [highlight, setHighlight] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // API call to save highlight
+    console.log(highlight);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow max-w-2xl mx-auto">
+      <div>
+        <label htmlFor="highlight" className="block text-sm font-medium text-gray-700">Highlight</label>
+        <textarea
+          id="highlight"
+          value={highlight}
+          onChange={(e) => setHighlight(e.target.value)}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          rows={4}
+        />
+      </div>
+      <button
+        type="submit"
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        Add Highlight
+      </button>
+    </form>
+  );
+}
+```
+
+### components/JobPostingForm.tsx
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+export default function JobPostingForm() {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // API call to save job
+    console.log(formData);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow max-w-2xl mx-auto">
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700">Job Title</label>
+        <input
+          type="text"
+          id="title"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+        />
+      </div>
+      <div>
+        <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+        <textarea
+          id="description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          rows={6}
+        />
+      </div>
+      <button
+        type="submit"
+        className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        Post Job
+      </button>
+    </form>
+  );
+}
+```
+
+### components/InterviewerCard.tsx
+```typescript
+'use client';
+
+import { useState } from 'react';
+
+interface InterviewerCardProps {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export default function InterviewerCard({ id, name, email }: InterviewerCardProps) {
+  const [date, setDate] = useState('');
+
+  const handleAppointment = async () => {
+    // API call to book appointment
+    console.log(`Booking with ${name} on ${date}`);
+  };
+
+  return (
+    <div className="bg-white shadow rounded-lg p-6">
+      <h3 className="text-lg font-semibold">{name}</h3>
+      <p className="text-gray-600">{email}</p>
+      <input
+        type="datetime-local"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        class Ner="mt-4 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+      />
+      <button
+        onClick={handleAppointment}
+        className="mt-2 w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        Book Appointment
+      </button>
+    </div>
+  );
+}
+```
+
+## 5. Pages
+### app/dashboard/page.tsx
+```typescript
+import DashboardCard from '@/components/DashboardCard';
+import prisma from '@/lib/prisma';
+
+export default async function Dashboard() {
+  const [employers, employees, interviewers] = await Promise.all([
+    prisma.employer.count(),
+    prisma.employee.count(),
+    prisma.interviewer.count(),
+  ]);
+
+  return (
+    <div className="py-10">
+      <h1 className="text-3xl font-bold mb-6">Dashboard</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <DashboardCard title="Employers" count={employers} />
+        <DashboardCard title="Employees" count={employees} />
+        <DashboardCard title="Interviewers" count={interviewers} />
+      </div>
+    </div>
+  );
+}
+```
+
+### app/employee/page.tsx
+```typescript
+import ResumeForm from '@/components/ResumeForm';
+
+export default function Employee() {
+  return (
+    <div className="py-10">
+      <h1 className="text-3xl font-bold mb-6">Update Resume</h1>
+      <ResumeForm />
+    </div>
+  );
+}
+```
+
+### app/highlights/page.tsx
+```typescript
+import HighlightForm from '@/components/HighlightForm';
+
+export default function Highlights() {
+  return (
+    <div className="py-10">
+      <h1 className="text-3xl font-bold mb-6">Add Resume Highlights</h1>
+      <HighlightForm />
+    </div>
+  );
+}
+```
+
+### app/jobs/page.tsx
+```typescript
+import JobPostingForm from '@/components/JobPostingForm';
+
+export default function Jobs() {
+  return (
+    <div className="py-10">
+      <h1 className="text-3xl font-bold mb-6">Post a Job</h1>
+      <JobPostingForm />
+    </div>
+  );
+}
+```
+
+### app/interviewers/page.tsx
+```typescript
+import InterviewerCard from '@/components/InterviewerCard';
+import prisma from '@/lib/prisma';
+
+export default async function Interviewers() {
+  const interviewers = await prisma.interviewer.findMany();
+
+  return (
+    <div className="py-10">
+      <h1 className="text-3xl font-bold mb-6">Interviewers</h1>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {interviewers.map((interviewer) => (
+          <InterviewerCard
+            key={interviewer.id}
+            id={interviewer.id}
+            name={interviewer.name}
+            email={interviewer.email}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+## 6. Setup Instructions
+1. Run `npx create-next-app@latest recruiter-portal` and choose TypeScript, Tailwind CSS, and App Router.
+2. Install Prisma: `npm install @prisma/client prisma --save-dev`.
+3. Initialize Prisma: `npx prisma init`.
+4. Update `prisma/schema.prisma` with the provided schema.
+5. Set `DATABASE_URL` in `.env` (e.g., `DATABASE_URL="postgresql://user:password@localhost:5432/recruiter_db?schema=public"`).
+6. Run `npx prisma migrate dev --name init` to create the database schema.
+7. Create the files as shown above.
+8. Run `npm run dev` to start the development server.
+
+## Notes
+- The app is mobile-responsive with Tailwind CSS utility classes (e.g., `grid-cols-1 md:grid-cols-3`).
+- Forms use client components for interactivity, with placeholders for API calls.
+- The dashboard fetches counts server-side for performance.
+- Interviewer cards include a datetime picker for appointments.
+- Prisma provides type-safe database access.
+- Add API routes in `app/api/` for form submissions and data fetching as needed.

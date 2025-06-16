@@ -34,7 +34,8 @@ import {
   Link as LinkIcon,
   Unlink,
   Upload,
-  Trash2
+  Trash2,
+  ChevronsRightLeftIcon
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -259,7 +260,7 @@ const AdminDashboard = () => {
                 }}
                 className="text-white hover:text-gray-200 transition-colors"
               >
-                <AlertCircle className="w-6 h-6" />
+                <ChevronsRightLeftIcon className="w-6 h-6" />
               </button>
             </div>
           </div>

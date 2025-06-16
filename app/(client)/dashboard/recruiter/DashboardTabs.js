@@ -1,4 +1,4 @@
-// app/(client)/dashboard/recruiter/DashboardTabs.js (Enhanced Version)
+// app/(client)/dashboard/recruiter/DashboardTabs.js (Responsive Redesign)
 import { 
     BarChart3, 
     UserPlus, 
@@ -8,266 +8,254 @@ import {
     Users, 
     TrendingUp,
     Shield,
-    Activity,
-    Target,
-    Calendar
+    ChevronDown
   } from "lucide-react"
   import { motion } from "framer-motion"
+  import { useState, useEffect } from "react"
   
   export default function DashboardTabs({ activeTab, setActiveTab, isAdmin }) {
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
+  
+    // Handle window resize
+    useEffect(() => {
+      const checkScreenSize = () => {
+        const mobile = window.innerWidth < 1024 // lg breakpoint
+        setIsMobile(mobile)
+        
+        // Close mobile menu when switching to desktop
+        if (!mobile && mobileMenuOpen) {
+          setMobileMenuOpen(false)
+        }
+      }
+  
+      // Check initial screen size
+      checkScreenSize()
+  
+      // Add resize listener
+      window.addEventListener('resize', checkScreenSize)
+      
+      // Cleanup
+      return () => window.removeEventListener('resize', checkScreenSize)
+    }, [mobileMenuOpen])
+  
     const tabs = [
       {
         id: "dashboard",
         label: isAdmin ? "Admin Dashboard" : "Dashboard",
+        shortLabel: isAdmin ? "Admin" : "Dashboard",
         icon: isAdmin ? Shield : BarChart3,
         description: isAdmin ? "Team overview and performance" : "Your recruiting insights",
-        color: "from-blue-500 to-blue-600",
-        lightColor: "bg-blue-50 text-blue-600 border-blue-200"
+        badge: null
       },
       {
         id: "candidates",
-        label: "Manage Candidates",
+        label: "Candidates",
+        shortLabel: "Candidates",
         icon: UserPlus,
-        description: "Add and track candidates",
-        color: "from-green-500 to-green-600",
-        lightColor: "bg-green-50 text-green-600 border-green-200"
+        description: "Manage your candidates",
+        badge: null
       },
       {
         id: "bulk-upload",
         label: "Bulk Upload",
+        shortLabel: "Upload",
         icon: Upload,
-        description: "Mass resume uploads",
-        color: "from-purple-500 to-purple-600",
-        lightColor: "bg-purple-50 text-purple-600 border-purple-200"
+        description: "Upload multiple resumes",
+        badge: null
       },
       {
         id: "resume-mapping",
         label: "Resume Mapping",
+        shortLabel: "Mapping",
         icon: LinkIcon,
         description: "Connect resumes to candidates",
-        color: "from-orange-500 to-orange-600",
-        lightColor: "bg-orange-50 text-orange-600 border-orange-200"
+        badge: null
       },
       {
         id: "resumes",
-        label: "All Resumes",
+        label: "Resumes",
+        shortLabel: "Resumes",
         icon: FileText,
-        description: "Resume database",
-        color: "from-cyan-500 to-cyan-600",
-        lightColor: "bg-cyan-50 text-cyan-600 border-cyan-200"
+        description: "Browse all resumes",
+        badge: null
       },
       ...(isAdmin ? [
         {
           id: "team",
-          label: "Team Management",
+          label: "Team",
+          shortLabel: "Team",
           icon: Users,
-          description: "Manage your recruiting team",
-          color: "from-red-500 to-red-600",
-          lightColor: "bg-red-50 text-red-600 border-red-200"
+          description: "Manage team members",
+          badge: null
         },
         {
           id: "analytics",
           label: "Analytics",
+          shortLabel: "Analytics",
           icon: TrendingUp,
-          description: "Deep insights and reports",
-          color: "from-indigo-500 to-indigo-600",
-          lightColor: "bg-indigo-50 text-indigo-600 border-indigo-200"
+          description: "Performance insights",
+          badge: "NEW"
         }
       ] : [])
     ]
   
-    return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 mb-8 overflow-hidden">
-        {/* Header with gradient */}
-        <div className="bg-gradient-to-r from-gray-50 to-blue-50 px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Recruiting Dashboard</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {isAdmin ? "Manage your team and candidates" : "Track your recruiting progress"}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-xs text-gray-600">Live</span>
-            </div>
-          </div>
-        </div>
+    const activeTabData = tabs.find(tab => tab.id === activeTab)
   
-        {/* Tab Navigation */}
-        <div className="relative">
-          {/* Desktop Tab Navigation */}
-          <div className="hidden lg:block">
-            <nav className="flex overflow-x-auto scrollbar-hide">
-              {tabs.map((tab, index) => {
-                const Icon = tab.icon
-                const isActive = activeTab === tab.id
-                
-                return (
-                  <motion.button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`
-                      relative flex-1 min-w-0 px-6 py-6 text-left transition-all duration-200
-                      hover:bg-gray-50 focus:outline-none focus:bg-gray-50
-                      ${isActive ? 'bg-white' : ''}
-                    `}
-                    whileHover={{ y: -1 }}
-                    whileTap={{ y: 0 }}
-                    initial={false}
-                    animate={{
-                      backgroundColor: isActive ? '#ffffff' : '#transparent'
-                    }}
-                  >
-                    {/* Active Tab Indicator */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-full"
-                        initial={false}
-                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                      />
-                    )}
-                    
-                    <div className="flex items-start gap-4">
-                      {/* Icon with gradient background */}
-                      <div className={`
-                        w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200
+    return (
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
+        {/* Desktop Navigation */}
+        {!isMobile ? (
+          <div className="max-w-7xl mx-auto">
+            <nav className="flex overflow-x-auto scrollbar-hide" aria-label="Tabs">
+              <div className="flex space-x-1 px-4 sm:px-6 min-w-full">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon
+                  const isActive = activeTab === tab.id
+                  
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`
+                        group relative flex items-center gap-2 py-4 px-3 sm:px-4 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap
                         ${isActive 
-                          ? `bg-gradient-to-br ${tab.color} text-white shadow-lg` 
-                          : `${tab.lightColor} border`
+                          ? 'border-blue-500 text-blue-600' 
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                         }
-                      `}>
-                        <Icon className={`w-6 h-6 ${isActive ? 'text-white' : ''}`} />
-                      </div>
+                      `}
+                      aria-current={isActive ? 'page' : undefined}
+                    >
+                      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 transition-colors ${isActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
                       
-                      {/* Tab Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className={`
-                          font-medium transition-colors duration-200
-                          ${isActive ? 'text-gray-900' : 'text-gray-600'}
-                        `}>
-                          {tab.label}
-                        </div>
-                        {/* <div className={`
-                          text-sm mt-1 transition-colors duration-200
-                          ${isActive ? 'text-gray-600' : 'text-gray-500'}
-                        `}>
-                          {tab.description}
-                        </div> */}
-                        
-                        {/* Progress indicator for active tab */}
-                        {isActive && (
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: "60%" }}
-                            transition={{ delay: 0.2, duration: 0.3 }}
-                            className="h-0.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full mt-2"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </motion.button>
-                )
-              })}
+                      {/* Show full label on larger screens, short label on smaller */}
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span className="sm:hidden">{tab.shortLabel}</span>
+                      
+                      {/* Badge */}
+                      {tab.badge && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {tab.badge}
+                        </span>
+                      )}
+                      
+                      {/* Active indicator */}
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeTabIndicator"
+                          className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-500"
+                          initial={false}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
             </nav>
           </div>
+        ) : (
+          /* Mobile Navigation */
+          <div className="relative z-30">
+            {/* Mobile Tab Selector */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left bg-white hover:bg-gray-50 transition-colors"
+              aria-expanded={mobileMenuOpen}
+              aria-haspopup="true"
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {activeTabData && (
+                  <>
+                    <activeTabData.icon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-gray-900 truncate">{activeTabData.label}</div>
+                      <div className="text-sm text-gray-500 truncate">{activeTabData.description}</div>
+                    </div>
+                  </>
+                )}
+              </div>
+              <ChevronDown 
+                className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform duration-200 ${mobileMenuOpen ? 'rotate-180' : ''}`} 
+              />
+            </button>
   
-          {/* Mobile Tab Navigation */}
-          <div className="lg:hidden">
-            <div className="relative">
-              {/* Mobile Tab Selector */}
-              <select
-                value={activeTab}
-                onChange={(e) => setActiveTab(e.target.value)}
-                className="w-full px-4 py-3 text-base font-medium bg-white border-0 focus:ring-2 focus:ring-blue-500 focus:border-transparent rounded-none appearance-none"
-              >
-                {tabs.map((tab) => (
-                  <option key={tab.id} value={tab.id}>
-                    {tab.label}
-                  </option>
-                ))}
-              </select>
+            {/* Mobile Dropdown Menu */}
+            {mobileMenuOpen && (
+              <div className="absolute top-full left-0 right-0 bg-white border border-gray-200 rounded-b-lg shadow-lg z-40">
+                <div className="py-1 max-h-80 overflow-y-auto">
+                  {tabs.map((tab) => {
+                    const Icon = tab.icon
+                    const isActive = activeTab === tab.id
+                    
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => {
+                          setActiveTab(tab.id)
+                          setMobileMenuOpen(false)
+                        }}
+                        className={`
+                          w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
+                          ${isActive 
+                            ? 'bg-blue-50 text-blue-600 border-r-4 border-blue-500' 
+                            : 'text-gray-700 hover:bg-gray-50'
+                          }
+                        `}
+                        aria-current={isActive ? 'page' : undefined}
+                      >
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium truncate">{tab.label}</div>
+                          <div className="text-sm text-gray-500 truncate">{tab.description}</div>
+                        </div>
+                        {tab.badge && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 flex-shrink-0">
+                            {tab.badge}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+  
+        {/* Tab Content Header */}
+        <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-6 py-3">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {activeTabData && (
+                  <>
+                    <activeTabData.icon className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <h1 className="text-lg font-semibold text-gray-900 truncate">{activeTabData.label}</h1>
+                      <p className="text-sm text-gray-600 truncate">{activeTabData.description}</p>
+                    </div>
+                  </>
+                )}
+              </div>
               
-              {/* Dropdown Arrow */}
-              <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+              {/* Status indicator */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-600 hidden sm:inline">Live</span>
               </div>
             </div>
-  
-            {/* Mobile Active Tab Display */}
-            {tabs.map((tab) => {
-              if (tab.id !== activeTab) return null
-              const Icon = tab.icon
-              
-              return (
-                <motion.div
-                  key={tab.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="px-4 py-4 bg-gray-50 border-t border-gray-200"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`
-                      w-10 h-10 rounded-lg flex items-center justify-center
-                      bg-gradient-to-br ${tab.color} text-white shadow-md
-                    `}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900">{tab.label}</div>
-                      {/* <div className="text-sm text-gray-600">{tab.description}</div> */}
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })}
           </div>
         </div>
   
-        {/* Tab Content Area Indicator */}
-        <div className="px-6 py-2 bg-gradient-to-r from-gray-50 to-blue-50 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {tabs.map((tab) => {
-                if (tab.id !== activeTab) return null
-                const Icon = tab.icon
-                
-                return (
-                  <motion.div
-                    key={tab.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="flex items-center gap-2"
-                  >
-                    <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${tab.color} flex items-center justify-center`}>
-                      <Icon className="w-3 h-3 text-white" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">
-                      Currently viewing: {tab.label}
-                    </span>
-                  </motion.div>
-                )
-              })}
-            </div>
-            
-            <div className="flex items-center gap-1">
-              {tabs.map((tab, index) => (
-                <motion.div
-                  key={tab.id}
-                  className={`w-2 h-2 rounded-full transition-colors duration-200 ${
-                    activeTab === tab.id ? 'bg-blue-500' : 'bg-gray-300'
-                  }`}
-                  whileHover={{ scale: 1.2 }}
-                  onClick={() => setActiveTab(tab.id)}
-                  style={{ cursor: 'pointer' }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* Simple backdrop for mobile menu */}
+        {isMobile && mobileMenuOpen && (
+          <div 
+            className="fixed inset-0 z-20" 
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+        )}
       </div>
     )
   }
