@@ -1000,7 +1000,7 @@ export default function TeamManagement() {
                   <p className="text-gray-600">{selectedMember.user.email}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                {/* <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-4 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
                       {getPerformanceScore(selectedMember).candidateCount}
@@ -1013,7 +1013,7 @@ export default function TeamManagement() {
                     </div>
                     <div className="text-sm text-gray-600">Success Rate</div>
                   </div>
-                </div>
+                </div> */}
 
                 <div className="space-y-4">
                   <div>

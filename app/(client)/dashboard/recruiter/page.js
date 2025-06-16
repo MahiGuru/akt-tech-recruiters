@@ -34,6 +34,7 @@ import {
   Zap,
   BarChart3
 } from 'lucide-react';
+import ResumeDatabase from "../../components/ResumeDatabase";
 
 export default function RecruiterDashboard() {
   const { data: session, status } = useSession();
@@ -532,14 +533,10 @@ export default function RecruiterDashboard() {
 
           {activeTab === "resumes" && (
             <div className="p-6">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900">Resume Database</h2>
-                  <div className="text-sm text-gray-600">
-                    {resumes.length} resumes
-                  </div>
-                </div>
-              </div>
+              <ResumeDatabase
+                isAdmin={isAdmin}
+                currentUserId={userId}
+              />
             </div>
           )}
 
