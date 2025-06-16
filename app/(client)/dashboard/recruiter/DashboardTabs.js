@@ -149,12 +149,12 @@ import {
                         `}>
                           {tab.label}
                         </div>
-                        <div className={`
+                        {/* <div className={`
                           text-sm mt-1 transition-colors duration-200
                           ${isActive ? 'text-gray-600' : 'text-gray-500'}
                         `}>
                           {tab.description}
-                        </div>
+                        </div> */}
                         
                         {/* Progress indicator for active tab */}
                         {isActive && (
@@ -218,7 +218,7 @@ import {
                     </div>
                     <div>
                       <div className="font-medium text-gray-900">{tab.label}</div>
-                      <div className="text-sm text-gray-600">{tab.description}</div>
+                      {/* <div className="text-sm text-gray-600">{tab.description}</div> */}
                     </div>
                   </div>
                 </motion.div>
