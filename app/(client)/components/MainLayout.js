@@ -1,6 +1,7 @@
+// app/(client)/components/MainLayout.js (Optimized)
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
@@ -16,19 +17,28 @@ import {
   UserCheck,
   Search,
   Plus,
-  Star
+  Star,
+  Clock
 } from 'lucide-react'
 import Image from 'next/image'
 
 import NotificationService from './NotificationService'
 import RecruiterAccessGuard from './RecruiterAccessGuard'
 
-
 export default function MainLayout({ children }) {
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
   const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // Memoize user data to prevent unnecessary re-renders
+  const user = useMemo(() => session?.user, [session?.user])
+
+  // Memoize navigation items to prevent recreation
+  const navigationItems = useMemo(() => [
+    { href: "/jobs", label: "Jobs" },
+    { href: "/contact", label: "Contact" }
+  ], [])
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -44,45 +54,62 @@ export default function MainLayout({ children }) {
     }
   }, [showUserMenu])
 
-  const handleDashboardRedirect = () => {
-    if (session?.user?.role === 'EMPLOYER') {
+  // Memoized handlers
+  const handleDashboardRedirect = useCallback(() => {
+    if (user?.role === 'EMPLOYER') {
       router.push('/dashboard/employer')
-    } else if (session?.user?.role === 'RECRUITER') {
+    } else if (user?.role === 'RECRUITER') {
       router.push('/dashboard/recruiter')
     } else {
       router.push('/dashboard/employee')
     }
     setShowUserMenu(false)
-  }
+  }, [user?.role, router])
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await signOut({ callbackUrl: '/' })
     setShowUserMenu(false)
-  }
+  }, [])
 
-  const getRoleColor = (role) => {
-    switch (role) {
+  // Memoized role utilities
+  const roleConfig = useMemo(() => {
+    if (!user?.role) return { color: 'bg-gray-100 text-gray-800', label: 'User' }
+    
+    switch (user.role) {
       case 'EMPLOYER':
-        return 'bg-purple-100 text-purple-800'
+        return { color: 'bg-purple-100 text-purple-800', label: 'Employer' }
       case 'RECRUITER':
-        return 'bg-green-100 text-green-800'
+        return { color: 'bg-green-100 text-green-800', label: 'Recruiter' }
       case 'EMPLOYEE':
       default:
-        return 'bg-blue-100 text-blue-800'
+        return { color: 'bg-blue-100 text-blue-800', label: 'Job Seeker' }
     }
-  }
+  }, [user?.role])
 
-  const getRoleLabel = (role) => {
-    switch (role) {
-      case 'EMPLOYER':
-        return 'Employer'
-      case 'RECRUITER':
-        return 'Recruiter'
-      case 'EMPLOYEE':
-      default:
-        return 'Job Seeker'
+  // Check if user can post jobs
+  const canPostJobs = useMemo(() => {
+    return user?.role === 'EMPLOYER' || 
+           (user?.role === 'RECRUITER' && user?.recruiterProfile?.isActive)
+  }, [user?.role, user?.recruiterProfile?.isActive])
+
+  // Check if user can access dashboard
+  const canAccessDashboard = useMemo(() => {
+    return user && (
+      user.role !== 'RECRUITER' || 
+      user.recruiterProfile?.isActive
+    )
+  }, [user])
+
+  // Memoized dashboard URL
+  const dashboardUrl = useMemo(() => {
+    if (!user) return '/'
+    
+    switch (user.role) {
+      case 'EMPLOYER': return '/dashboard/employer'
+      case 'RECRUITER': return '/dashboard/recruiter'
+      default: return '/dashboard/employee'
     }
-  }
+  }, [user])
 
   return (
     <RecruiterAccessGuard>
@@ -96,27 +123,30 @@ export default function MainLayout({ children }) {
             <div className="flex justify-between items-center py-4">
               {/* Logo */}
               <Link href="/" className="flex items-center gap-2">
-                <Image src="/logo.svg" alt="At Bench Logo" width={200} height={80} />
+                <Image 
+                  src="/logo.svg" 
+                  alt="At Bench Logo" 
+                  width={200} 
+                  height={80}
+                  priority
+                />
               </Link>
               
               {/* Navigation Links */}
               <div className="hidden md:flex items-center gap-8">
-                <Link 
-                  href="/jobs" 
-                  className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
-                    pathname === '/jobs' ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
-                  }`}
-                >
-                  Jobs
-                </Link>
-                <Link 
-                  href="/contact" 
-                  className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
-                    pathname === '/contact' ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
-                  }`}>Contact</Link>
+                {navigationItems.map((item) => (
+                  <Link 
+                    key={item.href}
+                    href={item.href} 
+                    className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
+                      pathname === item.href ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
                 
-                {(session?.user?.role === 'EMPLOYER' || 
-                  (session?.user?.role === 'RECRUITER' && session?.user?.recruiterProfile?.isActive)) && (
+                {canPostJobs && (
                   <Link 
                     href="/post-job" 
                     className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
@@ -127,13 +157,9 @@ export default function MainLayout({ children }) {
                   </Link>
                 )}
                 
-                {session?.user && (
+                {canAccessDashboard && (
                   <Link 
-                    href={
-                      session.user.role === 'EMPLOYER' ? '/dashboard/employer' :
-                      session.user.role === 'RECRUITER' ? '/dashboard/recruiter' :
-                      '/dashboard/employee'
-                    }
+                    href={dashboardUrl}
                     className={`text-gray-600 hover:text-gray-900 transition-colors font-medium ${
                       pathname.startsWith('/dashboard') ? 'text-primary-600 border-b-2 border-primary-600 pb-1' : ''
                     }`}
@@ -143,33 +169,33 @@ export default function MainLayout({ children }) {
                 )}
               </div>
               
-              {/* User Section - Enhanced with recruiter status */}
+              {/* User Section */}
               <div className="flex items-center gap-4 relative user-menu">
                 {status === 'loading' ? (
                   <div className="loading-spinner w-6 h-6" />
-                ) : session ? (
+                ) : user ? (
                   /* Authenticated User Menu */
                   <>
                     {/* Enhanced notifications for recruiters */}
-                    {session.user.role === 'RECRUITER' && session.user.recruiterProfile?.isActive && (
+                    {user.role === 'RECRUITER' && user.recruiterProfile?.isActive && (
                       <button 
-                        onClick={() => setShowNotificationsPanel(true)}
                         className="relative p-2 text-gray-400 hover:text-gray-600 transition-colors mr-2"
+                        aria-label="Notifications"
                       >
                         <Bell className="w-6 h-6" />
-                        {/* Notification badge would go here */}
                       </button>
                     )}
 
                     <button
                       onClick={() => setShowUserMenu(!showUserMenu)}
                       className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                      aria-expanded={showUserMenu}
                     >
                       <div className="flex items-center gap-2">
-                        {session.user.image ? (
+                        {user.image ? (
                           <img 
-                            src={session.user.image} 
-                            alt={session.user.name} 
+                            src={user.image} 
+                            alt={user.name} 
                             className="w-8 h-8 rounded-full"
                           />
                         ) : (
@@ -179,12 +205,11 @@ export default function MainLayout({ children }) {
                         )}
                         <div className="hidden sm:block text-left">
                           <p className="text-sm font-medium text-gray-900 truncate max-w-32">
-                            {session.user.name}
+                            {user.name}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {getRoleLabel(session.user.role)}
-                            {/* Show approval status for recruiters */}
-                            {session.user.role === 'RECRUITER' && !session.user.recruiterProfile?.isActive && (
+                            {roleConfig.label}
+                            {user.role === 'RECRUITER' && !user.recruiterProfile?.isActive && (
                               <span className="ml-1 text-yellow-600">(Pending)</span>
                             )}
                           </p>
@@ -193,7 +218,7 @@ export default function MainLayout({ children }) {
                       <ChevronDown className="w-4 h-4 text-gray-500" />
                     </button>
 
-                    {/* Enhanced Dropdown Menu with recruiter status */}
+                    {/* Enhanced Dropdown Menu */}
                     <AnimatePresence>
                       {showUserMenu && (
                         <motion.div
@@ -202,14 +227,15 @@ export default function MainLayout({ children }) {
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
                           transition={{ duration: 0.2 }}
                           className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50"
+                          style={{ top: '100%' }}
                         >
-                          {/* User Info with Status */}
+                          {/* User Info */}
                           <div className="px-4 py-3 border-b border-gray-100">
                             <div className="flex items-center gap-3">
-                              {session.user.image ? (
+                              {user.image ? (
                                 <img 
-                                  src={session.user.image} 
-                                  alt={session.user.name} 
+                                  src={user.image} 
+                                  alt={user.name} 
                                   className="w-12 h-12 rounded-full"
                                 />
                               ) : (
@@ -219,26 +245,25 @@ export default function MainLayout({ children }) {
                               )}
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">
-                                  {session.user.name}
+                                  {user.name}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">
-                                  {session.user.email}
+                                  {user.email}
                                 </p>
                                 <div className="flex items-center gap-2 mt-1">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getRoleColor(session.user.role)}`}>
-                                    {session.user.role === 'EMPLOYER' && <Building className="w-3 h-3 mr-1" />}
-                                    {session.user.role === 'RECRUITER' && <UserCheck className="w-3 h-3 mr-1" />}
-                                    {session.user.role === 'EMPLOYEE' && <User className="w-3 h-3 mr-1" />}
-                                    {getRoleLabel(session.user.role)}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${roleConfig.color}`}>
+                                    {user.role === 'EMPLOYER' && <Building className="w-3 h-3 mr-1" />}
+                                    {user.role === 'RECRUITER' && <UserCheck className="w-3 h-3 mr-1" />}
+                                    {user.role === 'EMPLOYEE' && <User className="w-3 h-3 mr-1" />}
+                                    {roleConfig.label}
                                   </span>
-                                  {/* Approval status for recruiters */}
-                                  {session.user.role === 'RECRUITER' && (
+                                  {user.role === 'RECRUITER' && (
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                      session.user.recruiterProfile?.isActive 
+                                      user.recruiterProfile?.isActive 
                                         ? 'bg-green-100 text-green-800' 
                                         : 'bg-yellow-100 text-yellow-800'
                                     }`}>
-                                      {session.user.recruiterProfile?.isActive ? 'Active' : 'Pending'}
+                                      {user.recruiterProfile?.isActive ? 'Active' : 'Pending'}
                                     </span>
                                   )}
                                 </div>
@@ -248,8 +273,7 @@ export default function MainLayout({ children }) {
 
                           {/* Menu Items */}
                           <div className="py-2">
-                            {/* Only show dashboard if user has access */}
-                            {(session.user.role !== 'RECRUITER' || session.user.recruiterProfile?.isActive) && (
+                            {canAccessDashboard && (
                               <button
                                 onClick={handleDashboardRedirect}
                                 className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
@@ -270,8 +294,7 @@ export default function MainLayout({ children }) {
                               Edit Profile
                             </button>
                             
-                            {/* Show approval status for pending recruiters */}
-                            {session.user.role === 'RECRUITER' && !session.user.recruiterProfile?.isActive && (
+                            {user.role === 'RECRUITER' && !user.recruiterProfile?.isActive && (
                               <button
                                 onClick={() => {
                                   router.push('/auth/recruiter-approval')
@@ -284,9 +307,7 @@ export default function MainLayout({ children }) {
                               </button>
                             )}
                             
-                            {/* Enhanced menu items based on role and access */}
-                            {(session.user.role === 'EMPLOYER' || 
-                              (session.user.role === 'RECRUITER' && session.user.recruiterProfile?.isActive)) && (
+                            {canPostJobs && (
                               <button
                                 onClick={() => {
                                   router.push('/post-job')
@@ -344,57 +365,62 @@ export default function MainLayout({ children }) {
           {children}
         </main>
 
-        {/* Footer remains the same... */}
-        <footer className="bg-gray-900 text-white py-12 mt-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid md:grid-cols-4 gap-8">
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
-                    <Briefcase className="w-5 h-5 text-white" />
-                  </div>
-                  <span className="text-xl font-bold">At Bench</span>
-                </div>
-                <p className="text-gray-400">
-                  Connecting talent with opportunity in the modern world.
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="font-semibold mb-4">For Job Seekers</h3>
-                <ul className="space-y-2 text-gray-400">
-                  <li><Link href="/jobs" className="hover:text-white transition-colors">Jobs</Link></li>
-                  <li><Link href="/dashboard/employee" className="hover:text-white transition-colors">My Applications</Link></li>
-                  <li><Link href="/auth/profile/edit" className="hover:text-white transition-colors">Create Profile</Link></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h3 className="font-semibold mb-4">For Employers</h3>
-                <ul className="space-y-2 text-gray-400">
-                  <li><Link href="/post-job" className="hover:text-white transition-colors">Post a Job</Link></li>
-                  <li><Link href="/dashboard/employer" className="hover:text-white transition-colors">Find Candidates</Link></li>
-                  <li><Link href="/auth/register?role=employer" className="hover:text-white transition-colors">Employer Signup</Link></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h3 className="font-semibold mb-4">Company</h3>
-                <ul className="space-y-2 text-gray-400">
-                  <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
-                  <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
-                  <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                  <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                </ul>
-              </div>
-            </div>
-            
-            <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-              <p>&copy; 2024 At Bench. All rights reserved.</p>
-            </div>
-          </div>
-        </footer>
+        {/* Footer - Memoized */}
+        <Footer />
       </div>
     </RecruiterAccessGuard>
   )
 }
+
+// Separate Footer component to prevent unnecessary re-renders
+const Footer = () => (
+  <footer className="bg-gray-900 text-white py-12 mt-16">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="grid md:grid-cols-4 gap-8">
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-white" />
+            </div>
+            <span className="text-xl font-bold">At Bench</span>
+          </div>
+          <p className="text-gray-400">
+            Connecting talent with opportunity in the modern world.
+          </p>
+        </div>
+        
+        <div>
+          <h3 className="font-semibold mb-4">For Job Seekers</h3>
+          <ul className="space-y-2 text-gray-400">
+            <li><Link href="/jobs" className="hover:text-white transition-colors">Jobs</Link></li>
+            <li><Link href="/dashboard/employee" className="hover:text-white transition-colors">My Applications</Link></li>
+            <li><Link href="/auth/profile/edit" className="hover:text-white transition-colors">Create Profile</Link></li>
+          </ul>
+        </div>
+        
+        <div>
+          <h3 className="font-semibold mb-4">For Employers</h3>
+          <ul className="space-y-2 text-gray-400">
+            <li><Link href="/post-job" className="hover:text-white transition-colors">Post a Job</Link></li>
+            <li><Link href="/dashboard/employer" className="hover:text-white transition-colors">Find Candidates</Link></li>
+            <li><Link href="/auth/register?role=employer" className="hover:text-white transition-colors">Employer Signup</Link></li>
+          </ul>
+        </div>
+        
+        <div>
+          <h3 className="font-semibold mb-4">Company</h3>
+          <ul className="space-y-2 text-gray-400">
+            <li><Link href="/about" className="hover:text-white transition-colors">About Us</Link></li>
+            <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
+            <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+            <li><Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link></li>
+          </ul>
+        </div>
+      </div>
+      
+      <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+        <p>&copy; 2024 At Bench. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+)

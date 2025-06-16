@@ -1,27 +1,36 @@
+// app/(client)/components/SessionProvider.js (Optimized)
 'use client'
 
 import { SessionProvider } from 'next-auth/react'
-import { useEffect } from 'react'
-import { useSession } from 'next-auth/react'
-import useStore from '../store/authStore'
+import { useEffect, useRef } from 'react'
 
-function AuthStateManager({ children }) {
-  const { data: session, status } = useSession()
-  const { initializeFromSession } = useStore()
-
+export default function AppSessionProvider({ children, session }) {
+  const hasInitialized = useRef(false)
+  
   useEffect(() => {
-    initializeFromSession(session)
-  }, [session, initializeFromSession])
+    // Prevent multiple initializations
+    if (hasInitialized.current) return
+    hasInitialized.current = true
+    
+    // Disable automatic session refresh on window focus
+    // This prevents unnecessary session checks when switching tabs
+    if (typeof window !== 'undefined') {
+      window.__NEXT_AUTH = {
+        ...window.__NEXT_AUTH,
+        _getSession: () => null // Disable automatic session fetching
+      }
+    }
+  }, [])
 
-  return children
-}
-
-export default function AppSessionProvider({ children }) {
   return (
-    <SessionProvider>
-      <AuthStateManager>
-        {children}
-      </AuthStateManager>
+    <SessionProvider
+      session={session}
+      // Reduce session refresh frequency
+      refetchInterval={5 * 60} // 5 minutes instead of default 5 seconds
+      refetchOnWindowFocus={false} // Don't refetch on tab focus
+      refetchWhenOffline={false} // Don't refetch when coming back online
+    >
+      {children}
     </SessionProvider>
   )
 }
