@@ -1,7 +1,23 @@
+// app/api/recruiter/candidates/route.js (Updated for Admin Access)
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
 import { prisma } from '../../../(client)/lib/prisma'
+
+// Helper function to get team member IDs for admin
+async function getTeamMemberIds(adminUserId) {
+  const teamMembers = await prisma.recruiter.findMany({
+    where: {
+      OR: [
+        { adminId: adminUserId }, // Team members
+        { userId: adminUserId, recruiterType: 'ADMIN' } // Current admin
+      ],
+      isActive: true
+    },
+    select: { userId: true }
+  })
+  return teamMembers.map(member => member.userId)
+}
 
 export async function GET(request) {
   try {
@@ -38,13 +54,22 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const status = searchParams.get('status')
+    const addedBy = searchParams.get('addedBy') // Filter by specific recruiter
     const experienceLevel = searchParams.get('experienceLevel')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
+    // Determine which candidates to show based on role
+    let allowedRecruiterIds = [session.user.id] // Default: own candidates
+
+    if (recruiterProfile.recruiterType === 'ADMIN') {
+      // Admin can see all team candidates
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
     // Build where clause for filtering
     let whereClause = {
-      addedById: session.user.id // Only show candidates added by this recruiter
+      addedById: { in: allowedRecruiterIds }
     }
 
     if (search) {
@@ -59,7 +84,11 @@ export async function GET(request) {
       whereClause.status = status
     }
 
-    // Fetch candidates with resumes, applications, and interviews
+    if (addedBy && allowedRecruiterIds.includes(addedBy)) {
+      whereClause.addedById = addedBy
+    }
+
+    // Fetch candidates with full details
     const candidates = await prisma.candidate.findMany({
       where: whereClause,
       include: {
@@ -116,14 +145,16 @@ export async function GET(request) {
     // Get status distribution for dashboard stats
     const statusStats = await prisma.candidate.groupBy({
       by: ['status'],
-      where: { addedById: session.user.id },
+      where: { addedById: { in: allowedRecruiterIds } },
       _count: { status: true }
     })
 
     // Calculate interview statistics
     const upcomingInterviewsCount = await prisma.interview.count({
       where: {
-        scheduledById: session.user.id,
+        candidate: {
+          addedById: { in: allowedRecruiterIds }
+        },
         scheduledAt: {
           gte: new Date()
         },
@@ -132,6 +163,31 @@ export async function GET(request) {
         }
       }
     })
+
+    // Get recruiter distribution (for admin view)
+    let recruiterStats = []
+    if (recruiterProfile.recruiterType === 'ADMIN') {
+      const recruiterDistribution = await prisma.candidate.groupBy({
+        by: ['addedById'],
+        where: { addedById: { in: allowedRecruiterIds } },
+        _count: { addedById: true }
+      })
+
+      recruiterStats = await Promise.all(
+        recruiterDistribution.map(async (stat) => {
+          const user = await prisma.user.findUnique({
+            where: { id: stat.addedById },
+            select: { name: true, email: true }
+          })
+          return {
+            recruiterId: stat.addedById,
+            recruiterName: user?.name || 'Unknown',
+            recruiterEmail: user?.email || '',
+            candidateCount: stat._count.addedById
+          }
+        })
+      )
+    }
 
     return NextResponse.json({
       candidates,
@@ -147,7 +203,12 @@ export async function GET(request) {
         statusDistribution: statusStats.map(item => ({
           status: item.status,
           count: item._count.status
-        }))
+        })),
+        recruiterDistribution: recruiterStats
+      },
+      permissions: {
+        isAdmin: recruiterProfile.recruiterType === 'ADMIN',
+        canManageAll: recruiterProfile.recruiterType === 'ADMIN'
       }
     })
 
@@ -193,7 +254,8 @@ export async function POST(request) {
       skills, 
       bio, 
       source, 
-      notes 
+      notes,
+      addedById // Allow admin to add candidates for other recruiters
     } = body
 
     if (!name || !email) {
@@ -203,19 +265,30 @@ export async function POST(request) {
       )
     }
 
+    // Determine who is adding the candidate
+    let actualAddedById = session.user.id
+    
+    // If admin is adding for another recruiter
+    if (addedById && recruiterProfile.recruiterType === 'ADMIN') {
+      const teamMemberIds = await getTeamMemberIds(session.user.id)
+      if (teamMemberIds.includes(addedById)) {
+        actualAddedById = addedById
+      }
+    }
+
     // Check if candidate already exists for this recruiter
     const existingCandidate = await prisma.candidate.findUnique({
       where: {
         email_addedById: {
           email,
-          addedById: session.user.id
+          addedById: actualAddedById
         }
       }
     })
 
     if (existingCandidate) {
       return NextResponse.json(
-        { message: 'Candidate with this email already exists in your database' },
+        { message: 'Candidate with this email already exists in the database' },
         { status: 400 }
       )
     }
@@ -232,7 +305,7 @@ export async function POST(request) {
         bio: bio || null,
         source: source || null,
         notes: notes || null,
-        addedById: session.user.id
+        addedById: actualAddedById
       },
       include: {
         resumes: true,
@@ -293,6 +366,18 @@ export async function PUT(request) {
       )
     }
 
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { 
       candidateId,
@@ -315,12 +400,20 @@ export async function PUT(request) {
       )
     }
 
-    // Verify candidate belongs to this recruiter
+    // Check if candidate exists and if user has permission to edit
+    let whereClause = { id: candidateId }
+
+    if (recruiterProfile.recruiterType === 'ADMIN') {
+      // Admin can edit any team member's candidates
+      const teamMemberIds = await getTeamMemberIds(session.user.id)
+      whereClause.addedById = { in: teamMemberIds }
+    } else {
+      // Regular recruiters can only edit their own candidates
+      whereClause.addedById = session.user.id
+    }
+
     const existingCandidate = await prisma.candidate.findFirst({
-      where: {
-        id: candidateId,
-        addedById: session.user.id
-      }
+      where: whereClause
     })
 
     if (!existingCandidate) {

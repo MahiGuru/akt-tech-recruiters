@@ -1,8 +1,23 @@
-// app/api/recruiter/interviews/route.js
+// app/api/recruiter/interviews/route.js (Updated for Admin Access)
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
 import { prisma } from '../../../(client)/lib/prisma'
+
+// Helper function to get team member IDs for admin
+async function getTeamMemberIds(adminUserId) {
+  const teamMembers = await prisma.recruiter.findMany({
+    where: {
+      OR: [
+        { adminId: adminUserId }, // Team members
+        { userId: adminUserId, recruiterType: 'ADMIN' } // Current admin
+      ],
+      isActive: true
+    },
+    select: { userId: true }
+  })
+  return teamMembers.map(member => member.userId)
+}
 
 export async function GET(request) {
   try {
@@ -15,22 +30,73 @@ export async function GET(request) {
       )
     }
 
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
+      )
+    }
+
     // Get query parameters
     const { searchParams } = new URL(request.url)
     const candidateId = searchParams.get('candidateId')
     const status = searchParams.get('status')
+    const scheduledBy = searchParams.get('scheduledBy') // Filter by recruiter who scheduled
     const fromDate = searchParams.get('fromDate')
     const toDate = searchParams.get('toDate')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
-    // Build where clause
+    // Determine access scope based on admin status
+    const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
+    let allowedRecruiterIds = [session.user.id]
+
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
+    // Build where clause - interviews scheduled by accessible recruiters OR for candidates added by accessible recruiters
     let whereClause = {
-      scheduledById: session.user.id // Only interviews scheduled by this recruiter
+      OR: [
+        { scheduledById: { in: allowedRecruiterIds } }, // Interviews scheduled by team
+        { 
+          candidate: {
+            addedById: { in: allowedRecruiterIds }
+          }
+        } // Interviews for team candidates
+      ]
     }
 
     if (candidateId) {
+      // Verify candidate access first
+      const candidate = await prisma.candidate.findFirst({
+        where: {
+          id: candidateId,
+          addedById: { in: allowedRecruiterIds }
+        }
+      })
+
+      if (!candidate) {
+        return NextResponse.json(
+          { message: 'Candidate not found or access denied' },
+          { status: 403 }
+        )
+      }
+
       whereClause.candidateId = candidateId
+    }
+
+    // Filter by specific recruiter (admin only)
+    if (scheduledBy && isAdmin && allowedRecruiterIds.includes(scheduledBy)) {
+      whereClause = {
+        scheduledById: scheduledBy,
+        ...(candidateId && { candidateId })
+      }
     }
 
     // FIXED: Handle comma-separated status values
@@ -55,7 +121,7 @@ export async function GET(request) {
       }
     }
 
-    // Fetch interviews
+    // Fetch interviews with full details
     const interviews = await prisma.interview.findMany({
       where: whereClause,
       include: {
@@ -66,7 +132,15 @@ export async function GET(request) {
             email: true,
             phone: true,
             skills: true,
-            experience: true
+            experience: true,
+            addedById: true,
+            addedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         },
         scheduledBy: {
@@ -82,6 +156,14 @@ export async function GET(request) {
       skip: offset
     })
 
+    // Add permissions to each interview
+    const interviewsWithPermissions = interviews.map(interview => ({
+      ...interview,
+      canEdit: isAdmin || interview.scheduledById === session.user.id,
+      canDelete: isAdmin || interview.scheduledById === session.user.id,
+      canReschedule: isAdmin || interview.scheduledById === session.user.id
+    }))
+
     // Get total count
     const totalCount = await prisma.interview.count({
       where: whereClause
@@ -90,14 +172,30 @@ export async function GET(request) {
     // Get status distribution for stats
     const statusStats = await prisma.interview.groupBy({
       by: ['status'],
-      where: { scheduledById: session.user.id },
+      where: {
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } },
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          }
+        ]
+      },
       _count: { status: true }
     })
 
     // Get upcoming interviews (next 7 days)
     const upcomingInterviews = await prisma.interview.count({
       where: {
-        scheduledById: session.user.id,
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } },
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          }
+        ],
         scheduledAt: {
           gte: new Date(),
           lte: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -108,8 +206,35 @@ export async function GET(request) {
       }
     })
 
+    // Get recruiter distribution (for admin view)
+    let recruiterStats = []
+    if (isAdmin) {
+      const recruiterInterviewStats = await prisma.interview.groupBy({
+        by: ['scheduledById'],
+        where: {
+          scheduledById: { in: allowedRecruiterIds }
+        },
+        _count: { scheduledById: true }
+      })
+
+      recruiterStats = await Promise.all(
+        recruiterInterviewStats.map(async (stat) => {
+          const user = await prisma.user.findUnique({
+            where: { id: stat.scheduledById },
+            select: { name: true, email: true }
+          })
+          return {
+            recruiterId: stat.scheduledById,
+            recruiterName: user?.name || 'Unknown',
+            recruiterEmail: user?.email || '',
+            interviewCount: stat._count.scheduledById
+          }
+        })
+      )
+    }
+
     return NextResponse.json({
-      interviews,
+      interviews: interviewsWithPermissions,
       pagination: {
         total: totalCount,
         limit,
@@ -122,7 +247,12 @@ export async function GET(request) {
         statusDistribution: statusStats.map(item => ({
           status: item.status,
           count: item._count.status
-        }))
+        })),
+        recruiterDistribution: recruiterStats
+      },
+      permissions: {
+        isAdmin,
+        canManageAll: isAdmin
       }
     })
 
@@ -146,6 +276,18 @@ export async function POST(request) {
       )
     }
 
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { 
       candidateId, 
@@ -154,7 +296,8 @@ export async function POST(request) {
       scheduledAt, 
       duration = 60, 
       meetingLink, 
-      notes 
+      notes,
+      scheduledById // Allow admin to schedule for other recruiters
     } = body
 
     if (!candidateId || !title || !scheduledAt) {
@@ -164,11 +307,19 @@ export async function POST(request) {
       )
     }
 
-    // Verify candidate belongs to this recruiter
+    // Determine access scope
+    const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
+    let allowedRecruiterIds = [session.user.id]
+
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
+    // Verify candidate belongs to accessible recruiters
     const candidate = await prisma.candidate.findFirst({
       where: {
         id: candidateId,
-        addedById: session.user.id
+        addedById: { in: allowedRecruiterIds }
       }
     })
 
@@ -177,6 +328,12 @@ export async function POST(request) {
         { message: 'Candidate not found or access denied' },
         { status: 404 }
       )
+    }
+
+    // Determine who is scheduling (admin can schedule for others)
+    let actualScheduledById = session.user.id
+    if (scheduledById && isAdmin && allowedRecruiterIds.includes(scheduledById)) {
+      actualScheduledById = scheduledById
     }
 
     // Validate interview time is in the future
@@ -209,11 +366,33 @@ export async function POST(request) {
       )
     }
 
+    // Check for recruiter's overlapping interviews
+    const recruiterOverlappingInterview = await prisma.interview.findFirst({
+      where: {
+        scheduledById: actualScheduledById,
+        scheduledAt: {
+          gte: new Date(interviewTime.getTime() - (duration * 60 * 1000) + 1),
+          lt: new Date(interviewTime.getTime() + (duration * 60 * 1000) - 1)
+        },
+        status: {
+          in: ['SCHEDULED', 'CONFIRMED']
+        }
+      }
+    })
+
+    if (recruiterOverlappingInterview) {
+      const recruiterName = actualScheduledById === session.user.id ? 'you' : 'the selected recruiter'
+      return NextResponse.json(
+        { message: `${recruiterName.charAt(0).toUpperCase() + recruiterName.slice(1)} already have an overlapping interview scheduled for this time. Please choose another slot.` },
+        { status: 400 }
+      )
+    }
+
     // Create interview
     const interview = await prisma.interview.create({
       data: {
         candidateId,
-        scheduledById: session.user.id,
+        scheduledById: actualScheduledById,
         title,
         description: description || null,
         scheduledAt: interviewTime,
@@ -227,7 +406,14 @@ export async function POST(request) {
             id: true,
             name: true,
             email: true,
-            phone: true
+            phone: true,
+            addedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         },
         scheduledBy: {
@@ -249,7 +435,7 @@ export async function POST(request) {
           title: 'Interview Reminder',
           message: `Your interview with ${candidate.name} for "${title}" starts in 15 minutes.`,
           type: 'INTERVIEW_REMINDER',
-          receiverId: session.user.id,
+          receiverId: actualScheduledById,
           interviewId: interview.id,
           scheduledFor: reminderTime
         }
@@ -281,6 +467,18 @@ export async function PUT(request) {
       )
     }
 
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { 
       interviewId, 
@@ -300,15 +498,33 @@ export async function PUT(request) {
       )
     }
 
-    // Verify interview belongs to this recruiter
+    // Determine access scope
+    const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
+    let allowedRecruiterIds = [session.user.id]
+
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
+    // Verify interview access
     const existingInterview = await prisma.interview.findFirst({
       where: {
         id: interviewId,
-        scheduledById: session.user.id
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } }, // Scheduled by team
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          } // For team candidates
+        ]
       },
       include: {
         candidate: {
-          select: { name: true }
+          select: { 
+            name: true,
+            addedById: true 
+          }
         }
       }
     })
@@ -317,6 +533,16 @@ export async function PUT(request) {
       return NextResponse.json(
         { message: 'Interview not found or access denied' },
         { status: 404 }
+      )
+    }
+
+    // Check if user can edit this specific interview
+    const canEdit = isAdmin || existingInterview.scheduledById === session.user.id
+
+    if (!canEdit) {
+      return NextResponse.json(
+        { message: 'You do not have permission to edit this interview' },
+        { status: 403 }
       )
     }
 
@@ -330,14 +556,16 @@ export async function PUT(request) {
         )
       }
 
+      const interviewDuration = duration || existingInterview.duration
+
       // Check for recruiter's overlapping interviews (excluding the current one)
       const recruiterOverlappingInterview = await prisma.interview.findFirst({
         where: {
           id: { not: interviewId },
-          scheduledById: session.user.id,
+          scheduledById: existingInterview.scheduledById,
           scheduledAt: {
-            gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
-            lt: new Date(newTime.getTime() + (duration * 60 * 1000) - 1)
+            gte: new Date(newTime.getTime() - (interviewDuration * 60 * 1000) + 1),
+            lt: new Date(newTime.getTime() + (interviewDuration * 60 * 1000) - 1)
           },
           status: {
             in: ['SCHEDULED', 'CONFIRMED']
@@ -347,7 +575,7 @@ export async function PUT(request) {
 
       if (recruiterOverlappingInterview) {
         return NextResponse.json(
-          { message: 'You have an overlapping interview scheduled for this time. Please choose another slot for yourself.' },
+          { message: 'The recruiter has an overlapping interview scheduled for this time. Please choose another slot.' },
           { status: 400 }
         )
       }
@@ -358,8 +586,8 @@ export async function PUT(request) {
           id: { not: interviewId },
           candidateId: existingInterview.candidateId,
           scheduledAt: {
-            gte: new Date(newTime.getTime() - (duration * 60 * 1000) + 1),
-            lt: new Date(newTime.getTime() + (duration * 60 * 1000) - 1)
+            gte: new Date(newTime.getTime() - (interviewDuration * 60 * 1000) + 1),
+            lt: new Date(newTime.getTime() + (interviewDuration * 60 * 1000) - 1)
           },
           status: {
             in: ['SCHEDULED', 'CONFIRMED']
@@ -393,7 +621,14 @@ export async function PUT(request) {
             id: true,
             name: true,
             email: true,
-            phone: true
+            phone: true,
+            addedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         },
         scheduledBy: {
@@ -426,7 +661,7 @@ export async function PUT(request) {
             title: 'Interview Reminder (Rescheduled)',
             message: `Your rescheduled interview with ${existingInterview.candidate.name} for "${updatedInterview.title}" starts in 15 minutes.`,
             type: 'INTERVIEW_REMINDER',
-            receiverId: session.user.id,
+            receiverId: existingInterview.scheduledById,
             interviewId: interviewId,
             scheduledFor: reminderTime
           }
@@ -459,6 +694,18 @@ export async function DELETE(request) {
       )
     }
 
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const interviewId = searchParams.get('interviewId')
 
@@ -469,11 +716,26 @@ export async function DELETE(request) {
       )
     }
 
-    // Verify interview belongs to this recruiter
+    // Determine access scope
+    const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
+    let allowedRecruiterIds = [session.user.id]
+
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
+    // Verify interview access
     const interview = await prisma.interview.findFirst({
       where: {
         id: interviewId,
-        scheduledById: session.user.id
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } },
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          }
+        ]
       }
     })
 
@@ -481,6 +743,16 @@ export async function DELETE(request) {
       return NextResponse.json(
         { message: 'Interview not found or access denied' },
         { status: 404 }
+      )
+    }
+
+    // Check if user can delete this specific interview
+    const canDelete = isAdmin || interview.scheduledById === session.user.id
+
+    if (!canDelete) {
+      return NextResponse.json(
+        { message: 'You do not have permission to delete this interview' },
+        { status: 403 }
       )
     }
 

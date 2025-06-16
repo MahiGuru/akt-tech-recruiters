@@ -1,16 +1,62 @@
-// app/(client)/lib/auth.js (Updated version)
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "./prisma"
-import GoogleProvider from "next-auth/providers/google"
-import GitHubProvider from "next-auth/providers/github"
-import LinkedInProvider from "next-auth/providers/linkedin"
-import CredentialsProvider from "next-auth/providers/credentials"
-import bcrypt from "bcrypt"
+// app/(client)/lib/auth.js (Updated with Recruiter Profile)
+import { NextAuthOptions } from 'next-auth'
+import CredentialsProvider from 'next-auth/providers/credentials'
+import GoogleProvider from 'next-auth/providers/google'
+import GitHubProvider from 'next-auth/providers/github'
+import LinkedInProvider from 'next-auth/providers/linkedin'
+import { prisma } from './prisma'
+import bcrypt from 'bcrypt'
 
 export const authOptions = {
-  adapter: PrismaAdapter(prisma),
   providers: [
-    // Social Providers
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' }
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error('Missing credentials')
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email },
+          include: {
+            recruiterProfile: {
+              include: {
+                adminRecruiter: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            }
+          }
+        })
+
+        if (!user || !user.password) {
+          throw new Error('Invalid credentials')
+        }
+
+        const isValidPassword = await bcrypt.compare(credentials.password, user.password)
+        
+        if (!isValidPassword) {
+          throw new Error('Invalid credentials')
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          role: user.role,
+          recruiterProfile: user.recruiterProfile
+        }
+      }
+    }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -24,12 +70,12 @@ export const authOptions = {
       clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
       authorization: {
         params: {
-          scope: "openid profile email",
+          scope: 'openid profile email',
         },
       },
-      issuer: "https://www.linkedin.com",
-      jwks_endpoint: "https://www.linkedin.com/oauth/openid_configuration",
-      profile(profile, tokens) {
+      issuer: 'https://www.linkedin.com',
+      jwks_endpoint: 'https://www.linkedin.com/oauth/openid/jwks',
+      async profile(profile, tokens) {
         return {
           id: profile.sub,
           name: profile.name,
@@ -38,154 +84,164 @@ export const authOptions = {
         }
       },
     }),
-    // Credentials Provider for email/password
-    CredentialsProvider({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" }
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password are required")
-        }
+  ],
+  session: {
+    strategy: 'jwt',
+  },
+  callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider === 'credentials') {
+        return true
+      }
 
-        try {
-          // Find user in database with recruiter profile
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email },
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              password: true,
-              role: true,
-              image: true,
-              phone: true,
-              location: true,
-              experience: true,
-              skills: true,
-              resumeUrl: true,
-              bio: true,
-              createdAt: true,
-              recruiterProfile: {
-                select: {
-                  id: true,
-                  recruiterType: true,
-                  department: true,
-                  isActive: true,
-                  adminId: true
+      // Handle OAuth sign in
+      try {
+        const existingUser = await prisma.user.findUnique({
+          where: { email: user.email },
+          include: {
+            recruiterProfile: {
+              include: {
+                adminRecruiter: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
                 }
               }
+            }
+          }
+        })
+
+        if (existingUser) {
+          // Update existing user
+          const updatedUser = await prisma.user.update({
+            where: { id: existingUser.id },
+            data: {
+              name: user.name || existingUser.name,
+              image: user.image || existingUser.image,
             },
-          })
-
-          if (!user || !user.password) {
-            throw new Error("Invalid email or password")
-          }
-
-          // Verify password
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
-          
-          if (!isPasswordValid) {
-            throw new Error("Invalid email or password")
-          }
-
-          // Return user object (password excluded)
-          const { password, ...userWithoutPassword } = user
-          return userWithoutPassword
-
-        } catch (error) {
-          console.error("Auth error:", error)
-          throw new Error("Authentication failed")
-        }
-      }
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user, account }) {
-      if (user) {
-        token.role = user.role
-        token.id = user.id
-        token.provider = account?.provider || 'credentials'
-        
-        // Add recruiter profile info to token
-        if (user.role === 'RECRUITER' && user.recruiterProfile) {
-          token.recruiterProfile = user.recruiterProfile
-        }
-      } else if (token.role === 'RECRUITER') {
-        // Refresh recruiter profile data on each request to get latest status
-        try {
-          const updatedProfile = await prisma.recruiter.findUnique({
-            where: { userId: token.id },
-            select: {
-              id: true,
-              recruiterType: true,
-              department: true,
-              isActive: true,
-              adminId: true
+            include: {
+              recruiterProfile: {
+                include: {
+                  adminRecruiter: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true
+                    }
+                  }
+                }
+              }
             }
           })
-          if (updatedProfile) {
-            token.recruiterProfile = updatedProfile
-          }
-        } catch (error) {
-          console.error("Error refreshing recruiter profile:", error)
+          
+          user.id = updatedUser.id
+          user.role = updatedUser.role
+          user.recruiterProfile = updatedUser.recruiterProfile
+        } else {
+          // Create new user
+          const newUser = await prisma.user.create({
+            data: {
+              email: user.email,
+              name: user.name,
+              image: user.image,
+              role: 'EMPLOYEE' // Default role for OAuth users
+            },
+            include: {
+              recruiterProfile: {
+                include: {
+                  adminRecruiter: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true
+                    }
+                  }
+                }
+              }
+            }
+          })
+          
+          user.id = newUser.id
+          user.role = newUser.role
+          user.recruiterProfile = newUser.recruiterProfile
+        }
+
+        return true
+      } catch (error) {
+        console.error('OAuth sign in error:', error)
+        return false
+      }
+    },
+    async jwt({ token, user, trigger, session }) {
+      // Initial sign in
+      if (user) {
+        token.id = user.id
+        token.role = user.role
+        token.recruiterProfile = user.recruiterProfile
+      }
+
+      // Handle session updates
+      if (trigger === 'update' && session) {
+        if (session.role) {
+          token.role = session.role
+        }
+        if (session.recruiterProfile !== undefined) {
+          token.recruiterProfile = session.recruiterProfile
         }
       }
+
+      // Refresh recruiter profile data periodically
+      if (token.role === 'RECRUITER' && token.id) {
+        try {
+          const user = await prisma.user.findUnique({
+            where: { id: token.id },
+            include: {
+              recruiterProfile: {
+                include: {
+                  adminRecruiter: {
+                    select: {
+                      id: true,
+                      name: true,
+                      email: true
+                    }
+                  }
+                }
+              }
+            }
+          })
+          
+          if (user) {
+            token.role = user.role
+            token.recruiterProfile = user.recruiterProfile
+          }
+        } catch (error) {
+          console.error('Error refreshing recruiter profile:', error)
+        }
+      }
+
       return token
     },
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id
         session.user.role = token.role
-        session.user.provider = token.provider
+        session.user.recruiterProfile = token.recruiterProfile
         
-        // Add recruiter profile to session
+        // Add convenience flags
         if (token.recruiterProfile) {
-          session.user.recruiterProfile = token.recruiterProfile
+          session.user.isActiveRecruiter = token.recruiterProfile.isActive
+          session.user.isAdminRecruiter = token.recruiterProfile.recruiterType === 'ADMIN'
+          session.user.recruiterType = token.recruiterProfile.recruiterType
         }
       }
       return session
     },
-    async signIn({ user, account, profile }) {
-      // Handle social login
-      if (account?.provider && account.provider !== 'credentials') {
-        try {
-          // Check if user exists
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email },
-            include: { recruiterProfile: true }
-          })
-          
-          // If user doesn't exist, we'll create them with default role
-          // The role selection will happen on the dashboard
-          if (!existingUser) {
-            // This will be handled by the adapter, but we can add custom logic here
-            return true
-          }
-          
-          return true
-        } catch (error) {
-          console.error("Error during social sign in:", error)
-          return false
-        }
-      }
-      
-      // Handle credentials login
-      if (account?.provider === 'credentials') {
-        return true
-      }
-      
-      return true
-    },
   },
   pages: {
     signIn: '/auth/login',
-    newUser: '/auth/role-selection', // Redirect new social users to role selection
+    signUp: '/auth/register',
   },
-  session: {
-    strategy: "jwt",
-  },
-  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV === 'development',
 }

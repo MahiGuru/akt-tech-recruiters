@@ -1,7 +1,23 @@
+// app/api/recruiter/resumes/[id]/map/route.js (Updated for Admin Access)
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../../../(client)/lib/auth'
 import { prisma } from '../../../../../(client)/lib/prisma'
+
+// Helper function to get team member IDs for admin
+async function getTeamMemberIds(adminUserId) {
+  const teamMembers = await prisma.recruiter.findMany({
+    where: {
+      OR: [
+        { adminId: adminUserId }, // Team members
+        { userId: adminUserId, recruiterType: 'ADMIN' } // Current admin
+      ],
+      isActive: true
+    },
+    select: { userId: true }
+  })
+  return teamMembers.map(member => member.userId)
+}
 
 export async function PUT(request, { params }) {
   try {
@@ -11,6 +27,18 @@ export async function PUT(request, { params }) {
       return NextResponse.json(
         { message: 'Unauthorized' },
         { status: 401 }
+      )
+    }
+
+    // Get recruiter profile
+    const recruiterProfile = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id }
+    })
+
+    if (!recruiterProfile || !recruiterProfile.isActive) {
+      return NextResponse.json(
+        { message: 'Recruiter profile not found or inactive' },
+        { status: 403 }
       )
     }
 
@@ -25,7 +53,15 @@ export async function PUT(request, { params }) {
       )
     }
 
-    // Verify resume exists and is mappable
+    // Determine access scope
+    const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
+    let allowedRecruiterIds = [session.user.id]
+
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
+
+    // Verify resume exists and is accessible
     const resume = await prisma.resume.findUnique({
       where: { id: resumeId },
       include: {
@@ -40,7 +76,8 @@ export async function PUT(request, { params }) {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            addedById: true
           }
         }
       }
@@ -53,11 +90,19 @@ export async function PUT(request, { params }) {
       )
     }
 
-    // Verify candidate belongs to this recruiter
+    // Check if admin can access this resume
+    if (resume.candidateId && !allowedRecruiterIds.includes(resume.candidate.addedById)) {
+      return NextResponse.json(
+        { message: 'Resume access denied' },
+        { status: 403 }
+      )
+    }
+
+    // Verify candidate belongs to accessible recruiters
     const candidate = await prisma.candidate.findFirst({
       where: {
         id: candidateId,
-        addedById: session.user.id
+        addedById: { in: allowedRecruiterIds }
       }
     })
 
@@ -91,7 +136,15 @@ export async function PUT(request, { params }) {
             email: true,
             phone: true,
             skills: true,
-            experience: true
+            experience: true,
+            addedById: true,
+            addedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         },
         user: {
@@ -113,6 +166,19 @@ export async function PUT(request, { params }) {
         receiverId: session.user.id
       }
     })
+
+    // If admin mapped for another recruiter, notify them too
+    if (isAdmin && candidate.addedById !== session.user.id) {
+      await prisma.notification.create({
+        data: {
+          title: 'Resume Mapped by Admin',
+          message: `Admin ${session.user.name} mapped resume "${resume.title}" to your candidate ${candidate.name}`,
+          type: 'INFO',
+          receiverId: candidate.addedById,
+          senderId: session.user.id
+        }
+      })
+    }
 
     return NextResponse.json({
       message: 'Resume mapped to candidate successfully',
