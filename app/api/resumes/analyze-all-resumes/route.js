@@ -1,12 +1,15 @@
 'use server'
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '../../../(client)/lib/auth'
 import { analyzeResumeMatch } from '../../../(client)/lib/openai';
-import { extractTextFromFile, getAllResumeFiles } from '../../../(client)/lib/fileProcessor';
+import { getAllResumeFiles, getRecruiterResumeFiles, extractTextFromResumeFile } from '../../../(client)/lib/fileProcessor';
 
 export async function POST(request) {
   try {
-    const { jobDescription, minMatchScore = 0 } = await request.json();
+    const session = await getServerSession(authOptions);
+    const { jobDescription, minMatchScore = 0, recruiterOnly = false } = await request.json();
 
     if (!jobDescription || jobDescription.trim().length < 10) {
       return NextResponse.json({ 
@@ -15,24 +18,37 @@ export async function POST(request) {
     }
 
     console.log('Starting resume analysis process...');
+    console.log(`Recruiter-only mode: ${recruiterOnly}`);
+    console.log(`Session user: ${session?.user?.name} (${session?.user?.role})`);
 
-    // Get all resume files from the uploads folder
+    // Get resume files based on the mode and user permissions
     let resumeFiles;
     try {
-      resumeFiles = await getAllResumeFiles();
-      console.log(`Found ${resumeFiles.length} resume files`);
+      if (recruiterOnly && session?.user?.role === 'RECRUITER') {
+        // Get files only from the current recruiter's directory
+        resumeFiles = await getRecruiterResumeFiles(session.user.id, session.user.name || 'Unknown');
+        console.log(`Found ${resumeFiles.length} resume files in recruiter directory`);
+      } else {
+        // Get files from all directories (original behavior)
+        resumeFiles = await getAllResumeFiles();
+        console.log(`Found ${resumeFiles.length} resume files across all directories`);
+      }
     } catch (fileError) {
       console.error('Error getting resume files:', fileError);
       return NextResponse.json({
         error: `Failed to read resume files: ${fileError.message}`,
-        suggestion: 'Please check if public/uploads/resume folder exists and contains resume files'
+        suggestion: 'Please check if public/uploads/resumes folder exists and contains resume files'
       }, { status: 500 });
     }
     
     if (resumeFiles.length === 0) {
+      const suggestion = recruiterOnly 
+        ? 'No resume files found in your recruiter directory. Please upload some resumes first.'
+        : 'Please add resume files to public/uploads/resumes folder';
+        
       return NextResponse.json({
         success: true,
-        message: 'No resume files found in uploads folder',
+        message: 'No resume files found',
         results: [],
         summary: {
           totalFiles: 0,
@@ -41,7 +57,8 @@ export async function POST(request) {
           errors: 0,
           resultsAboveMinScore: 0
         },
-        suggestion: 'Please add resume files to public/uploads/resume folder'
+        suggestion,
+        mode: recruiterOnly ? 'recruiter-only' : 'all-files'
       });
     }
 
@@ -51,19 +68,25 @@ export async function POST(request) {
     let errorCount = 0;
 
     // Process each resume file
-    for (const filename of resumeFiles) {
-      try {
-        console.log(`\n=== Processing file ${processedCount + 1}/${resumeFiles.length}: ${filename} ===`);
+    for (const resumeFileInfo of resumeFiles) {
+      const displayName = resumeFileInfo.subdirectory 
+        ? `${resumeFileInfo.subdirectory}/${resumeFileInfo.filename}`
+        : resumeFileInfo.filename;
         
-        // Extract text from resume
+      try {
+        console.log(`\n=== Processing file ${processedCount + 1}/${resumeFiles.length}: ${displayName} ===`);
+        
+        // Extract text from resume using the new method
         let resumeText;
         try {
-          resumeText = await extractTextFromFile(filename);
-          console.log(`✅ Text extraction successful for ${filename} (${resumeText.length} chars)`);
+          resumeText = await extractTextFromResumeFile(resumeFileInfo);
+          console.log(`✅ Text extraction successful for ${displayName} (${resumeText.length} chars)`);
         } catch (extractError) {
-          console.error(`❌ Text extraction failed for ${filename}:`, extractError);
+          console.error(`❌ Text extraction failed for ${displayName}:`, extractError);
           results.push({
-            filename,
+            filename: resumeFileInfo.filename,
+            subdirectory: resumeFileInfo.subdirectory,
+            displayName,
             error: `Text extraction failed: ${extractError.message}`,
             analysis: null,
             processedAt: new Date().toISOString(),
@@ -75,9 +98,11 @@ export async function POST(request) {
         
         // Skip if text is too short after extraction
         if (!resumeText || resumeText.length < 50) {
-          console.warn(`⚠️ Skipping ${filename} - insufficient text content (${resumeText?.length || 0} chars)`);
+          console.warn(`⚠️ Skipping ${displayName} - insufficient text content (${resumeText?.length || 0} chars)`);
           results.push({
-            filename,
+            filename: resumeFileInfo.filename,
+            subdirectory: resumeFileInfo.subdirectory,
+            displayName,
             error: `Insufficient text content (${resumeText?.length || 0} characters)`,
             analysis: null,
             processedAt: new Date().toISOString(),
@@ -90,7 +115,7 @@ export async function POST(request) {
         // UPDATED: Enhanced AI analysis with better error handling
         let analysis;
         try {
-          console.log(`🤖 Starting AI analysis for ${filename}...`);
+          console.log(`🤖 Starting AI analysis for ${displayName}...`);
           
           // Check if OpenAI API key is available
           if (!process.env.OPENAI_API_KEY) {
@@ -106,9 +131,9 @@ export async function POST(request) {
           console.log(`Using ${analysisText.length} characters for AI analysis`);
           
           analysis = await analyzeResumeMatch(analysisText, jobDescription);
-          console.log(`✅ AI analysis completed for ${filename} - Score: ${analysis.matchScore}%`);
+          console.log(`✅ AI analysis completed for ${displayName} - Score: ${analysis.matchScore}%`);
         } catch (aiError) {
-          console.error(`❌ AI analysis failed for ${filename}:`, aiError);
+          console.error(`❌ AI analysis failed for ${displayName}:`, aiError);
           
           // UPDATED: More specific AI error handling
           let aiErrorMessage = aiError.message;
@@ -125,7 +150,9 @@ export async function POST(request) {
           }
           
           results.push({
-            filename,
+            filename: resumeFileInfo.filename,
+            subdirectory: resumeFileInfo.subdirectory,
+            displayName,
             error: `AI analysis failed: ${aiErrorMessage}`,
             analysis: null,
             processedAt: new Date().toISOString(),
@@ -139,14 +166,17 @@ export async function POST(request) {
         // Only include results above minimum score
         if (analysis.matchScore >= minMatchScore) {
           results.push({
-            filename,
+            filename: resumeFileInfo.filename,
+            subdirectory: resumeFileInfo.subdirectory,
+            displayName,
+            fileSize: resumeFileInfo.size,
             analysis,
             processedAt: new Date().toISOString()
           });
           successCount++;
-          console.log(`✅ Added to results: ${filename} (${analysis.matchScore}% match)`);
+          console.log(`✅ Added to results: ${displayName} (${analysis.matchScore}% match)`);
         } else {
-          console.log(`⚠️ Filtered out: ${filename} (${analysis.matchScore}% < ${minMatchScore}%)`);
+          console.log(`⚠️ Filtered out: ${displayName} (${analysis.matchScore}% < ${minMatchScore}%)`);
         }
         
         processedCount++;
@@ -158,9 +188,11 @@ export async function POST(request) {
         }
         
       } catch (error) {
-        console.error(`❌ Unexpected error processing ${filename}:`, error);
+        console.error(`❌ Unexpected error processing ${displayName}:`, error);
         results.push({
-          filename,
+          filename: resumeFileInfo.filename,
+          subdirectory: resumeFileInfo.subdirectory,
+          displayName,
           error: `Unexpected error: ${error.message}`,
           analysis: null,
           processedAt: new Date().toISOString()
@@ -187,6 +219,7 @@ export async function POST(request) {
     console.log(`Successfully processed: ${successCount}`);
     console.log(`Errors: ${errorCount}`);
     console.log(`Results above min score: ${successResults.length}`);
+    console.log(`Mode: ${recruiterOnly ? 'recruiter-only' : 'all-files'}`);
 
     return NextResponse.json({
       success: true,
@@ -199,7 +232,13 @@ export async function POST(request) {
         resultsAboveMinScore: successResults.length
       },
       jobDescription: jobDescription.substring(0, 100) + '...',
-      minMatchScore
+      minMatchScore,
+      mode: recruiterOnly ? 'recruiter-only' : 'all-files',
+      recruiterInfo: recruiterOnly && session ? {
+        id: session.user.id,
+        name: session.user.name,
+        directoryName: `${(session.user.name || 'Unknown').replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}-${session.user.id}`
+      } : null
     });
 
   } catch (error) {

@@ -3,20 +3,42 @@ import { readFile, readdir, access, stat } from 'fs/promises';
 import { constants } from 'fs';
 import path from 'path';
 
-export async function extractTextFromFile(filename) {
-  const filePath = path.join(process.cwd(), 'public/uploads/resumes', filename);
+export async function extractTextFromFile(filename, subdirectory = null) {
+  // Build the file path - handle both old flat structure and new subdirectory structure
+  let filePath;
+  if (subdirectory) {
+    filePath = path.join(process.cwd(), 'public/uploads/resumes', subdirectory, filename);
+  } else {
+    // Try the flat structure first, then check subdirectories if not found
+    filePath = path.join(process.cwd(), 'public/uploads/resumes', filename);
+  }
   
   try {
     console.log(`Starting text extraction for: ${filename}`);
     console.log(`Full file path: ${filePath}`);
     
-    // Check if file exists and is readable
+    // Check if file exists at the specified path
+    let fileExists = false;
     try {
       await access(filePath, constants.F_OK | constants.R_OK);
-      console.log(`File ${filename} exists and is readable`);
+      fileExists = true;
+      console.log(`File ${filename} exists and is readable at ${filePath}`);
     } catch (accessError) {
-      console.error(`File access error for ${filename}:`, accessError);
-      throw new Error(`File ${filename} is not accessible or doesn't exist`);
+      // If subdirectory wasn't specified, try to find the file in subdirectories
+      if (!subdirectory) {
+        console.log(`File not found in root directory, searching subdirectories...`);
+        const foundPath = await findFileInSubdirectories(filename);
+        if (foundPath) {
+          filePath = foundPath;
+          fileExists = true;
+          console.log(`Found file in subdirectory: ${filePath}`);
+        }
+      }
+      
+      if (!fileExists) {
+        console.error(`File access error for ${filename}:`, accessError);
+        throw new Error(`File ${filename} is not accessible or doesn't exist`);
+      }
     }
 
     // Get file stats
@@ -197,7 +219,7 @@ export async function extractTextFromFile(filename) {
     
     // Provide more specific error messages
     if (error.code === 'ENOENT') {
-      throw new Error(`File ${filename} not found in uploads/resume folder`);
+      throw new Error(`File ${filename} not found in uploads/resumes folder`);
     } else if (error.code === 'EACCES') {
       throw new Error(`Permission denied reading file ${filename}`);
     } else if (error.code === 'EISDIR') {
@@ -208,7 +230,37 @@ export async function extractTextFromFile(filename) {
   }
 }
 
-export async function getAllResumeFiles() {
+// Helper function to find a file in subdirectories
+async function findFileInSubdirectories(filename) {
+  const resumeDir = path.join(process.cwd(), 'public/uploads/resumes');
+  
+  try {
+    const items = await readdir(resumeDir);
+    
+    for (const item of items) {
+      const itemPath = path.join(resumeDir, item);
+      const stats = await stat(itemPath);
+      
+      if (stats.isDirectory()) {
+        // Check if the file exists in this subdirectory
+        const possibleFilePath = path.join(itemPath, filename);
+        try {
+          await access(possibleFilePath, constants.F_OK | constants.R_OK);
+          return possibleFilePath;
+        } catch {
+          // File not in this subdirectory, continue searching
+          continue;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error searching subdirectories:', error);
+  }
+  
+  return null;
+}
+
+export async function getAllResumeFiles(recruiterSubdirectory = null) {
   try {
     const resumeDir = path.join(process.cwd(), 'public/uploads/resumes');
     console.log(`Scanning resume directory: ${resumeDir}`);
@@ -222,36 +274,95 @@ export async function getAllResumeFiles() {
       throw new Error(`Resume directory not found or not accessible: ${resumeDir}`);
     }
 
-    const files = await readdir(resumeDir);
-    console.log(`Found ${files.length} files in resume directory:`, files);
-    
-    // Filter for supported file types
     const supportedExtensions = ['.pdf', '.docx', '.doc', '.txt'];
     const resumeFiles = [];
     
-    for (const file of files) {
-      const ext = path.extname(file).toLowerCase();
-      if (supportedExtensions.includes(ext)) {
-        try {
-          // Check if it's actually a file (not a directory)
-          const filePath = path.join(resumeDir, file);
-          const fileStats = await stat(filePath);
-          
-          if (fileStats.isFile()) {
-            resumeFiles.push(file);
-            console.log(`Added resume file: ${file} (${fileStats.size} bytes)`);
-          } else {
-            console.log(`Skipping ${file} - not a regular file`);
+    if (recruiterSubdirectory) {
+      // Get files from specific recruiter subdirectory
+      const subdirPath = path.join(resumeDir, recruiterSubdirectory);
+      try {
+        await access(subdirPath, constants.F_OK | constants.R_OK);
+        const files = await readdir(subdirPath);
+        
+        for (const file of files) {
+          const ext = path.extname(file).toLowerCase();
+          if (supportedExtensions.includes(ext)) {
+            try {
+              const filePath = path.join(subdirPath, file);
+              const fileStats = await stat(filePath);
+              
+              if (fileStats.isFile()) {
+                resumeFiles.push({
+                  filename: file,
+                  subdirectory: recruiterSubdirectory,
+                  fullPath: filePath,
+                  size: fileStats.size
+                });
+                console.log(`Added resume file: ${recruiterSubdirectory}/${file} (${fileStats.size} bytes)`);
+              }
+            } catch (statError) {
+              console.warn(`Could not stat file ${file}:`, statError);
+            }
           }
-        } catch (statError) {
-          console.warn(`Could not stat file ${file}:`, statError);
         }
-      } else {
-        console.log(`Skipping ${file} - unsupported extension: ${ext}`);
+      } catch (subdirError) {
+        console.error(`Error accessing recruiter subdirectory ${recruiterSubdirectory}:`, subdirError);
+        throw new Error(`Recruiter directory not found: ${recruiterSubdirectory}`);
+      }
+    } else {
+      // Get files from all locations (root and subdirectories)
+      const items = await readdir(resumeDir);
+      
+      for (const item of items) {
+        const itemPath = path.join(resumeDir, item);
+        const itemStats = await stat(itemPath);
+        
+        if (itemStats.isFile()) {
+          // File in root directory
+          const ext = path.extname(item).toLowerCase();
+          if (supportedExtensions.includes(ext)) {
+            resumeFiles.push({
+              filename: item,
+              subdirectory: null,
+              fullPath: itemPath,
+              size: itemStats.size
+            });
+            console.log(`Added resume file from root: ${item} (${itemStats.size} bytes)`);
+          }
+        } else if (itemStats.isDirectory()) {
+          // Check subdirectory for files
+          try {
+            const subFiles = await readdir(itemPath);
+            
+            for (const subFile of subFiles) {
+              const ext = path.extname(subFile).toLowerCase();
+              if (supportedExtensions.includes(ext)) {
+                try {
+                  const subFilePath = path.join(itemPath, subFile);
+                  const subFileStats = await stat(subFilePath);
+                  
+                  if (subFileStats.isFile()) {
+                    resumeFiles.push({
+                      filename: subFile,
+                      subdirectory: item,
+                      fullPath: subFilePath,
+                      size: subFileStats.size
+                    });
+                    console.log(`Added resume file from ${item}: ${subFile} (${subFileStats.size} bytes)`);
+                  }
+                } catch (subStatError) {
+                  console.warn(`Could not stat subdirectory file ${subFile}:`, subStatError);
+                }
+              }
+            }
+          } catch (subdirError) {
+            console.warn(`Could not read subdirectory ${item}:`, subdirError);
+          }
+        }
       }
     }
 
-    console.log(`Found ${resumeFiles.length} valid resume files:`, resumeFiles);
+    console.log(`Found ${resumeFiles.length} valid resume files`);
     return resumeFiles;
 
   } catch (error) {
@@ -264,5 +375,21 @@ export async function getAllResumeFiles() {
     } else {
       throw new Error(`Failed to read resume directory: ${error.message}`);
     }
+  }
+}
+
+// New function specifically for recruiter resume analysis
+export async function getRecruiterResumeFiles(recruiterId, recruiterName) {
+  const cleanName = recruiterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  const subdirectory = `${cleanName}-${recruiterId}`;
+  return await getAllResumeFiles(subdirectory);
+}
+
+// Function to extract text from a resume with full path information
+export async function extractTextFromResumeFile(resumeFileInfo) {
+  if (resumeFileInfo.subdirectory) {
+    return await extractTextFromFile(resumeFileInfo.filename, resumeFileInfo.subdirectory);
+  } else {
+    return await extractTextFromFile(resumeFileInfo.filename);
   }
 }

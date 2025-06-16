@@ -1,4 +1,4 @@
-// app/api/recruiter/resumes/route.js (Updated for Admin Access)
+// app/api/recruiter/resumes/route.js (Updated for Recruiter-Specific Folders)
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
@@ -7,7 +7,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
-const UPLOAD_DIR = join(process.cwd(), 'public/uploads/resumes');
+const BASE_UPLOAD_DIR = join(process.cwd(), 'public/uploads/resumes');
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = [
   'application/pdf',
@@ -31,10 +31,31 @@ async function getTeamMemberIds(adminUserId) {
   return teamMembers.map(member => member.userId)
 }
 
-// Ensure upload directory exists
-async function ensureUploadDir() {
-  if (!existsSync(UPLOAD_DIR)) {
-    await mkdir(UPLOAD_DIR, { recursive: true })
+// Helper function to create recruiter-specific directory
+async function getRecruiterUploadDir(recruiterId, recruiterName) {
+  // Clean the recruiter name for use in directory path
+  const cleanName = recruiterName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+  const dirName = `${cleanName}-${recruiterId}`
+  const recruiterDir = join(BASE_UPLOAD_DIR, dirName)
+  
+  // Ensure base directory exists
+  if (!existsSync(BASE_UPLOAD_DIR)) {
+    await mkdir(BASE_UPLOAD_DIR, { recursive: true })
+  }
+  
+  // Ensure recruiter-specific directory exists
+  if (!existsSync(recruiterDir)) {
+    await mkdir(recruiterDir, { recursive: true })
+    console.log(`Created recruiter directory: ${recruiterDir}`)
+  }
+  
+  return { recruiterDir, dirName }
+}
+
+// Ensure base upload directory exists
+async function ensureBaseUploadDir() {
+  if (!existsSync(BASE_UPLOAD_DIR)) {
+    await mkdir(BASE_UPLOAD_DIR, { recursive: true })
   }
 }
 
@@ -259,7 +280,7 @@ export async function POST(request) {
       )
     }
 
-    await ensureUploadDir()
+    await ensureBaseUploadDir()
     
     const formData = await request.formData()
     const file = formData.get('resume')
@@ -292,6 +313,12 @@ export async function POST(request) {
         { status: 400 }
       )
     }
+
+    // Get recruiter-specific upload directory
+    const { recruiterDir, dirName } = await getRecruiterUploadDir(
+      session.user.id, 
+      session.user.name || 'Unknown'
+    )
 
     // Get name for filename (from user or candidate)
     let ownerName = 'unknown'
@@ -337,9 +364,9 @@ export async function POST(request) {
     const expLevel = experienceLevel.toLowerCase()
     const ownerType = userId ? 'user' : 'candidate'
     const filename = `${ownerType}_${cleanName}_${expLevel}_${timestamp}.${extension}`
-    const filepath = join(UPLOAD_DIR, filename)
+    const filepath = join(recruiterDir, filename)
 
-    // Convert file to buffer and save
+    // Convert file to buffer and save to recruiter-specific directory
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
     await writeFile(filepath, buffer)
@@ -349,11 +376,12 @@ export async function POST(request) {
     const existingResumes = await prisma.resume.count({ where: whereClause })
     const isPrimary = existingResumes === 0
 
-    // Create resume record
+    // Create resume record with recruiter-specific URL path
+    const resumeUrl = `/uploads/resumes/${dirName}/${filename}`
     const resumeData = {
       filename,
       originalName,
-      url: `/uploads/resumes/${filename}`,
+      url: resumeUrl,
       fileSize: file.size,
       mimeType: file.type,
       title,
@@ -395,15 +423,247 @@ export async function POST(request) {
       }
     })
 
+    console.log(`Resume uploaded successfully to: ${filepath}`)
+    console.log(`Resume URL: ${resumeUrl}`)
+
     return NextResponse.json({
       message: 'Resume uploaded successfully',
-      resume
+      resume,
+      uploadInfo: {
+        directory: dirName,
+        filepath: resumeUrl
+      }
     })
 
   } catch (error) {
     console.error('Resume upload error:', error)
     return NextResponse.json(
       { message: 'Failed to upload resume', details: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+// Helper function to find and delete file in directory structure
+async function findAndDeleteResumeFile(filename, resumeUrl) {
+  console.log(`Attempting to delete resume file: ${filename}`);
+  console.log(`Resume URL: ${resumeUrl}`);
+  
+  // Extract the relative path from the URL
+  if (resumeUrl.startsWith('/uploads/resumes/')) {
+    const relativePath = resumeUrl.replace('/uploads/resumes/', '');
+    const fullFilePath = join(BASE_UPLOAD_DIR, relativePath);
+    
+    try {
+      // Check if file exists at the URL-specified path
+      await access(fullFilePath, constants.F_OK);
+      await unlink(fullFilePath);
+      console.log(`✅ Successfully deleted file: ${fullFilePath}`);
+      return true;
+    } catch (error) {
+      console.warn(`Failed to delete file at URL path ${fullFilePath}:`, error.message);
+    }
+  }
+  
+  // Fallback: try to find file in old flat structure
+  const flatPath = join(BASE_UPLOAD_DIR, filename);
+  try {
+    await access(flatPath, constants.F_OK);
+    await unlink(flatPath);
+    console.log(`✅ Successfully deleted file from flat structure: ${flatPath}`);
+    return true;
+  } catch (error) {
+    console.warn(`File not found in flat structure: ${flatPath}`);
+  }
+  
+  // Last resort: search all subdirectories
+  try {
+    const { readdir, stat } = await import('fs/promises');
+    const items = await readdir(BASE_UPLOAD_DIR);
+    
+    for (const item of items) {
+      const itemPath = join(BASE_UPLOAD_DIR, item);
+      const stats = await stat(itemPath);
+      
+      if (stats.isDirectory()) {
+        const possibleFilePath = join(itemPath, filename);
+        try {
+          await access(possibleFilePath, constants.F_OK);
+          await unlink(possibleFilePath);
+          console.log(`✅ Successfully deleted file from subdirectory: ${possibleFilePath}`);
+          return true;
+        } catch {
+          // File not in this subdirectory, continue searching
+          continue;
+        }
+      }
+    }
+  } catch (searchError) {
+    console.error('Error searching for file in subdirectories:', searchError);
+  }
+  
+  console.warn(`⚠️ Could not find or delete file: ${filename}`);
+  return false;
+}
+
+export async function DELETE(request, { params }) {
+  try {
+    const session = await getServerSession(authOptions)
+    const { id } = params
+
+    // Get resume details before deletion
+    const resume = await prisma.resume.findUnique({
+      where: { id },
+      include: { 
+        user: true,
+        candidate: {
+          include: {
+            addedBy: true
+          }
+        }
+      }
+    })
+
+    if (!resume) {
+      return NextResponse.json(
+        { message: 'Resume not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check permissions
+    let canDelete = false;
+    
+    if (session) {
+      // User can delete their own resumes
+      if (resume.userId === session.user.id) {
+        canDelete = true;
+      }
+      
+      // Recruiters can delete resumes for candidates they manage
+      if (session.user.role === 'RECRUITER' && resume.candidateId) {
+        const recruiterProfile = await prisma.recruiter.findUnique({
+          where: { userId: session.user.id }
+        });
+        
+        if (recruiterProfile?.isActive) {
+          // Check if this recruiter added the candidate or is an admin
+          if (resume.candidate.addedById === session.user.id) {
+            canDelete = true;
+          } else if (recruiterProfile.recruiterType === 'ADMIN') {
+            // Admin recruiters can delete resumes from their team members
+            const teamMember = await prisma.recruiter.findFirst({
+              where: {
+                userId: resume.candidate.addedById,
+                OR: [
+                  { adminId: session.user.id },
+                  { userId: session.user.id }
+                ],
+                isActive: true
+              }
+            });
+            if (teamMember) {
+              canDelete = true;
+            }
+          }
+        }
+      }
+    }
+    
+    if (!canDelete) {
+      return NextResponse.json(
+        { message: 'Permission denied' },
+        { status: 403 }
+      )
+    }
+
+    // Delete file from filesystem using improved search method
+    const fileDeleted = await findAndDeleteResumeFile(resume.filename, resume.url);
+    
+    if (!fileDeleted) {
+      console.warn(`Could not delete physical file for resume ${id}, but proceeding with database deletion`);
+    }
+
+    // If this was the primary resume, make another one primary
+    if (resume.isPrimary) {
+      const whereClause = resume.userId 
+        ? { userId: resume.userId, id: { not: id } }
+        : { candidateId: resume.candidateId, id: { not: id } };
+        
+      const nextResume = await prisma.resume.findFirst({
+        where: whereClause,
+        orderBy: { createdAt: 'desc' }
+      })
+
+      if (nextResume) {
+        await prisma.resume.update({
+          where: { id: nextResume.id },
+          data: { isPrimary: true }
+        })
+        console.log(`Set resume ${nextResume.id} as new primary resume`);
+      }
+    }
+
+    // Delete resume record from database
+    await prisma.resume.delete({
+      where: { id }
+    })
+
+    // Create notification for successful deletion
+    if (session && resume.candidateId) {
+      await prisma.notification.create({
+        data: {
+          title: 'Resume Deleted',
+          message: `Resume "${resume.title || resume.originalName}" has been deleted successfully`,
+          type: 'INFO',
+          receiverId: session.user.id
+        }
+      }).catch(notificationError => {
+        console.warn('Could not create deletion notification:', notificationError);
+      });
+    }
+
+    console.log(`✅ Resume ${id} deleted successfully`);
+
+    return NextResponse.json({
+      message: 'Resume deleted successfully',
+      fileDeleted,
+      resumeInfo: {
+        title: resume.title,
+        originalName: resume.originalName,
+        wasInSubdirectory: resume.url.includes('/')
+      }
+    })
+
+  } catch (error) {
+    console.error('Resume deletion error:', error)
+    return NextResponse.json(
+      { message: 'Failed to delete resume', details: error.message },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(request, { params }) {
+  try {
+    const { id } = params
+    const body = await request.json()
+    
+    const updatedResume = await prisma.resume.update({
+      where: { id },
+      data: {
+        title: body.title,
+        description: body.description,
+        experienceLevel: body.experienceLevel,
+        isActive: body.isActive
+      }
+    })
+
+    return NextResponse.json(updatedResume)
+  } catch (error) {
+    console.error('Error updating resume:', error)
+    return NextResponse.json(
+      { message: 'Failed to update resume' },
       { status: 500 }
     )
   }
