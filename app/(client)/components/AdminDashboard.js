@@ -3,47 +3,81 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import {
-  AlertCircle,
+import { 
+  Users, 
+  UserPlus, 
+  TrendingUp, 
+  Calendar,
+  Target,
+  Award,
+  Activity,
   Clock,
   CheckCircle,
-  X,
-  User,
-  Shield,
-  UserCheck,
-  Users,
-  TrendingUp,
-  Activity
+  AlertCircle,
+  BarChart3,
+  PieChart,
+  Eye,
+  MapPin,
+  Briefcase,
+  Star,
+  Filter,
+  Search,
+  Download,
+  RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-export default function AdminDashboard() {
-  const [pendingRequests, setPendingRequests] = useState([])
-  const [stats, setStats] = useState({})
+const AdminDashboard = () => {
+  const [dashboardData, setDashboardData] = useState({
+    teamStats: {},
+    allCandidates: [],
+    teamMembers: [],
+    recentActivity: [],
+    performanceMetrics: {}
+  })
   const [isLoading, setIsLoading] = useState(true)
+  const [selectedFilter, setSelectedFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedRecruiter, setSelectedRecruiter] = useState('all')
 
   useEffect(() => {
-    fetchDashboardData()
+    fetchAdminDashboardData()
   }, [])
 
-  const fetchDashboardData = async () => {
+  const fetchAdminDashboardData = async () => {
     try {
       setIsLoading(true)
       
-      // Fetch pending requests
-      const pendingResponse = await fetch('/api/recruiter/team/pending')
-      if (pendingResponse.ok) {
-        const pendingData = await pendingResponse.json()
-        setPendingRequests(pendingData.requests || [])
-      }
+      // Fetch all data needed for admin dashboard
+      const [teamResponse, candidatesResponse, performanceResponse] = await Promise.all([
+        fetch('/api/recruiter/team'),
+        fetch('/api/recruiter/admin/candidates'),
+        fetch('/api/recruiter/admin/performance')
+      ])
 
-      // Fetch team stats
-      const teamResponse = await fetch('/api/recruiter/team')
+      let teamData = { teamMembers: [], stats: {} }
+      let candidatesData = { candidates: [], stats: {} }
+      let performanceData = { metrics: {}, activity: [] }
+
       if (teamResponse.ok) {
-        const teamData = await teamResponse.json()
-        setStats(teamData.stats || {})
+        teamData = await teamResponse.json()
+      }
+      
+      if (candidatesResponse.ok) {
+        candidatesData = await candidatesResponse.json()
+      }
+      
+      if (performanceResponse.ok) {
+        performanceData = await performanceResponse.json()
       }
 
+      setDashboardData({
+        teamStats: teamData.stats,
+        allCandidates: candidatesData.candidates || [],
+        teamMembers: teamData.teamMembers || [],
+        recentActivity: performanceData.activity || [],
+        performanceMetrics: performanceData.metrics || {}
+      })
     } catch (error) {
       console.error('Error fetching admin dashboard data:', error)
       toast.error('Failed to load dashboard data')
@@ -52,39 +86,25 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleApprovalAction = async (requestId, action, candidateName) => {
-    try {
-      const response = await fetch('/api/recruiter/team/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          requestId,
-          action
-        })
-      })
+  const filteredCandidates = dashboardData.allCandidates.filter(candidate => {
+    const matchesSearch = candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         candidate.skills?.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+    
+    const matchesRecruiter = selectedRecruiter === 'all' || candidate.addedById === selectedRecruiter
+    const matchesFilter = selectedFilter === 'all' || candidate.status === selectedFilter
 
-      if (response.ok) {
-        toast.success(`${candidateName}'s request ${action}d successfully`)
-        fetchDashboardData() // Refresh data
-      } else {
-        const error = await response.json()
-        toast.error(error.message || `Failed to ${action} request`)
-      }
-    } catch (error) {
-      console.error(`Error ${action}ing request:`, error)
-      toast.error('Something went wrong')
-    }
-  }
+    return matchesSearch && matchesRecruiter && matchesFilter
+  })
 
-  const getRecruiterTypeConfig = (type) => {
-    const configs = {
-      'TA': { label: 'Technical Analyst', color: 'bg-blue-100 text-blue-800', icon: '🔍' },
-      'HR': { label: 'Human Resources', color: 'bg-green-100 text-green-800', icon: '👥' },
-      'CS': { label: 'Customer Success', color: 'bg-purple-100 text-purple-800', icon: '🤝' },
-      'LEAD': { label: 'Lead Recruiter', color: 'bg-orange-100 text-orange-800', icon: '🎯' },
-      'JUNIOR': { label: 'Junior Recruiter', color: 'bg-gray-100 text-gray-800', icon: '⭐' }
+  const getStatusColor = (status) => {
+    const colors = {
+      'ACTIVE': 'bg-green-100 text-green-800',
+      'PLACED': 'bg-blue-100 text-blue-800',
+      'INACTIVE': 'bg-gray-100 text-gray-800',
+      'DO_NOT_CONTACT': 'bg-red-100 text-red-800'
     }
-    return configs[type] || configs['TA']
+    return colors[status] || 'bg-gray-100 text-gray-800'
   }
 
   if (isLoading) {
@@ -96,216 +116,348 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Admin Overview Header */}
-      <div className="bg-gradient-to-r from-red-500 to-red-600 rounded-lg p-6 text-white">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-            <Shield className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">Admin Dashboard</h2>
-            <p className="text-red-100">Manage team members and approvals</p>
-          </div>
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
+          <p className="text-gray-600">Overview of your recruiting team's performance and candidates</p>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white/10 rounded-lg p-3">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              <span className="text-sm">Total Team</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.total || 0}</p>
-          </div>
-          
-          <div className="bg-white/10 rounded-lg p-3">
-            <div className="flex items-center gap-2">
-              <UserCheck className="w-4 h-4" />
-              <span className="text-sm">Active</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.active || 0}</p>
-          </div>
-          
-          <div className="bg-white/10 rounded-lg p-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span className="text-sm">Pending</span>
-            </div>
-            <p className="text-2xl font-bold">{pendingRequests.length}</p>
-          </div>
-          
-          <div className="bg-white/10 rounded-lg p-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              <span className="text-sm">Growth</span>
-            </div>
-            <p className="text-2xl font-bold">↑12%</p>
-          </div>
+        <div className="flex gap-3">
+          <button
+            onClick={fetchAdminDashboardData}
+            className="btn btn-secondary"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button className="btn btn-primary">
+            <Download className="w-4 h-4" />
+            Export Report
+          </button>
         </div>
       </div>
 
-      {/* Urgent: Pending Approvals */}
-      {pendingRequests.length > 0 && (
-        <div className="bg-white rounded-lg border border-yellow-200 shadow-sm">
-          <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-yellow-900">
-                  Urgent: Pending Approvals ({pendingRequests.length})
-                </h3>
-                <p className="text-yellow-700 text-sm">
-                  New recruiters are waiting for your approval to access the system
-                </p>
-              </div>
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm font-medium">Total Team Members</p>
+              <p className="text-3xl font-bold mt-1">{dashboardData.teamStats.total || 0}</p>
+              <p className="text-blue-100 text-sm mt-1">
+                {dashboardData.teamStats.active || 0} active
+              </p>
+            </div>
+            <div className="bg-blue-400 bg-opacity-30 rounded-lg p-3">
+              <Users className="w-8 h-8" />
             </div>
           </div>
-          
-          <div className="p-6 space-y-4">
-            {pendingRequests.map((request, index) => {
-              const typeConfig = getRecruiterTypeConfig(request.recruiterType)
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm font-medium">Total Candidates</p>
+              <p className="text-3xl font-bold mt-1">{dashboardData.allCandidates.length}</p>
+              <p className="text-green-100 text-sm mt-1">
+                {dashboardData.allCandidates.filter(c => c.status === 'ACTIVE').length} active
+              </p>
+            </div>
+            <div className="bg-green-400 bg-opacity-30 rounded-lg p-3">
+              <Target className="w-8 h-8" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm font-medium">Placed Candidates</p>
+              <p className="text-3xl font-bold mt-1">
+                {dashboardData.allCandidates.filter(c => c.status === 'PLACED').length}
+              </p>
+              <p className="text-purple-100 text-sm mt-1">This month</p>
+            </div>
+            <div className="bg-purple-400 bg-opacity-30 rounded-lg p-3">
+              <Award className="w-8 h-8" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-orange-100 text-sm font-medium">Team Performance</p>
+              <p className="text-3xl font-bold mt-1">87%</p>
+              <p className="text-orange-100 text-sm mt-1">Success rate</p>
+            </div>
+            <div className="bg-orange-400 bg-opacity-30 rounded-lg p-3">
+              <TrendingUp className="w-8 h-8" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Team Performance Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Team Members Performance */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.5 }}
+          className="lg:col-span-2 bg-white rounded-xl shadow-sm border p-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Team Performance</h3>
+            <div className="flex gap-2">
+              <button className="btn btn-sm btn-secondary">
+                <BarChart3 className="w-4 h-4" />
+                View Details
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {dashboardData.teamMembers.map((member, index) => {
+              const candidateCount = dashboardData.allCandidates.filter(c => c.addedById === member.userId).length
+              const placedCount = dashboardData.allCandidates.filter(c => c.addedById === member.userId && c.status === 'PLACED').length
               
               return (
                 <motion.div
-                  key={request.id}
+                  key={member.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                  className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg hover:shadow-md transition-shadow"
+                  transition={{ delay: 0.6 + index * 0.1 }}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                      {request.user?.image ? (
+                    <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                      {member.user.image ? (
                         <img 
-                          src={request.user.image} 
-                          alt={request.user.name} 
-                          className="w-12 h-12 rounded-full"
+                          src={member.user.image} 
+                          alt={member.user.name} 
+                          className="w-10 h-10 rounded-full"
                         />
                       ) : (
-                        <User className="w-6 h-6 text-yellow-600" />
+                        <Users className="w-5 h-5 text-primary-600" />
                       )}
                     </div>
-                    
                     <div>
-                      <h4 className="font-semibold text-gray-900">{request.user?.name}</h4>
-                      <p className="text-sm text-gray-600">{request.user?.email}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${typeConfig.color}`}>
-                          {typeConfig.icon} {typeConfig.label}
-                        </span>
-                        {request.department && (
-                          <span className="text-xs text-gray-500">• {request.department}</span>
-                        )}
-                        <span className="text-xs text-gray-500">
-                          • {new Date(request.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
+                      <h4 className="font-medium text-gray-900">{member.user.name}</h4>
+                      <p className="text-sm text-gray-600">
+                        {member.recruiterType} • {member.department || 'No Department'}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleApprovalAction(request.id, 'approve', request.user?.name)}
-                      className="btn btn-sm bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleApprovalAction(request.id, 'reject', request.user?.name)}
-                      className="btn btn-sm bg-red-600 hover:bg-red-700 text-white shadow-sm"
-                    >
-                      <X className="w-4 h-4" />
-                      Reject
-                    </button>
+                  <div className="flex items-center gap-6 text-sm">
+                    <div className="text-center">
+                      <p className="font-semibold text-gray-900">{candidateCount}</p>
+                      <p className="text-gray-600">Candidates</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-green-600">{placedCount}</p>
+                      <p className="text-gray-600">Placed</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-semibold text-blue-600">
+                        {candidateCount > 0 ? Math.round((placedCount / candidateCount) * 100) : 0}%
+                      </p>
+                      <p className="text-gray-600">Success</p>
+                    </div>
                   </div>
                 </motion.div>
               )
             })}
           </div>
-        </div>
-      )}
+        </motion.div>
 
-      {/* Quick Actions */}
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg border p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900">Team Overview</h3>
-          </div>
-          <p className="text-gray-600 text-sm mb-4">
-            Monitor your team performance and growth
-          </p>
-          <div className="space-y-2">
-            {stats.typeDistribution?.map((type, index) => (
-              <div key={index} className="flex justify-between text-sm">
-                <span className="text-gray-600">{type.type}s:</span>
-                <span className="font-medium">{type.count}</span>
-              </div>
+        {/* Recent Activity */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-white rounded-xl shadow-sm border p-6"
+        >
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Activity</h3>
+          <div className="space-y-4">
+            {dashboardData.recentActivity.slice(0, 8).map((activity, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.8 + index * 0.1 }}
+                className="flex items-start gap-3"
+              >
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Activity className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-900">{activity.title || 'New candidate added'}</p>
+                  <p className="text-xs text-gray-600">{activity.time || '2 minutes ago'}</p>
+                </div>
+              </motion.div>
             ))}
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg border p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900">Growth Metrics</h3>
-          </div>
-          <p className="text-gray-600 text-sm mb-4">
-            Track team expansion and productivity
-          </p>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">This Month:</span>
-              <span className="font-medium text-green-600">+3 members</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Active Rate:</span>
-              <span className="font-medium">
-                {stats.total ? Math.round((stats.active / stats.total) * 100) : 0}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg border p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Activity className="w-5 h-5 text-purple-600" />
-            </div>
-            <h3 className="font-semibold text-gray-900">Recent Activity</h3>
-          </div>
-          <p className="text-gray-600 text-sm mb-4">
-            Latest team member activities
-          </p>
-          <div className="space-y-2">
-            <div className="text-sm">
-              <span className="text-gray-600">No recent activity</span>
-            </div>
-          </div>
-        </div>
+        </motion.div>
       </div>
 
-      {/* No Pending Requests Message */}
-      {pendingRequests.length === 0 && (
-        <div className="bg-white rounded-lg border p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+      {/* All Candidates Overview */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.9 }}
+        className="bg-white rounded-xl shadow-sm border"
+      >
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">All Team Candidates</h3>
+            <div className="text-sm text-gray-600">
+              {filteredCandidates.length} of {dashboardData.allCandidates.length} candidates
+            </div>
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            All Caught Up!
-          </h3>
-          <p className="text-gray-600">
-            No pending approval requests at the moment. Your team is all set.
-          </p>
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-4">
+            <div className="relative flex-1 min-w-64">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search candidates..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="input-field pl-10"
+              />
+            </div>
+            
+            <select
+              value={selectedRecruiter}
+              onChange={(e) => setSelectedRecruiter(e.target.value)}
+              className="input-field min-w-48"
+            >
+              <option value="all">All Recruiters</option>
+              {dashboardData.teamMembers.map(member => (
+                <option key={member.userId} value={member.userId}>
+                  {member.user.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={selectedFilter}
+              onChange={(e) => setSelectedFilter(e.target.value)}
+              className="input-field"
+            >
+              <option value="all">All Status</option>
+              <option value="ACTIVE">Active</option>
+              <option value="PLACED">Placed</option>
+              <option value="INACTIVE">Inactive</option>
+              <option value="DO_NOT_CONTACT">Do Not Contact</option>
+            </select>
+          </div>
         </div>
-      )}
+
+        <div className="p-6">
+          {filteredCandidates.length === 0 ? (
+            <div className="text-center py-12">
+              <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No candidates found</h3>
+              <p className="text-gray-600">
+                {searchTerm || selectedFilter !== 'all' || selectedRecruiter !== 'all' 
+                  ? 'Try adjusting your search criteria' 
+                  : 'Your team hasn\'t added any candidates yet'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredCandidates.map((candidate, index) => (
+                <motion.div
+                  key={candidate.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h4 className="font-medium text-gray-900">{candidate.name}</h4>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
+                          {candidate.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          <span>Added by {candidate.addedBy?.name}</span>
+                        </div>
+                        {candidate.location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            <span>{candidate.location}</span>
+                          </div>
+                        )}
+                        {candidate.experience && (
+                          <div className="flex items-center gap-1">
+                            <Briefcase className="w-3 h-3" />
+                            <span>{candidate.experience} years experience</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {candidate.skills && candidate.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {candidate.skills.slice(0, 3).map((skill, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                              {skill}
+                            </span>
+                          ))}
+                          {candidate.skills.length > 3 && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                              +{candidate.skills.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 ml-4">
+                      <button className="btn btn-ghost btn-sm text-blue-600 hover:text-blue-700">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
     </div>
   )
 }
+
+export default AdminDashboard

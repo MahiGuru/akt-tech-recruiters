@@ -99,7 +99,7 @@ model Recruiter {
   adminId        String?       // Reference to admin recruiter
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
-  
+
   // Relations
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   adminRecruiter User?         @relation("AdminRecruiter", fields: [adminId], references: [id])
@@ -121,7 +121,7 @@ model Candidate {
   status       CandidateStatus @default(ACTIVE)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  
+
   // Relations
   addedById    String   // Recruiter who added this candidate
   addedBy      User     @relation("RecruiterAddedCandidate", fields: [addedById], references: [id])
