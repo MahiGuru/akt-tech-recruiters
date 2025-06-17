@@ -1,4 +1,4 @@
-// app/(client)/components/CandidateManagement.js - Complete Updated Version
+// app/(client)/components/CandidateManagement.js - Updated with Priority Sorting
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -47,8 +47,8 @@ const getInterviewStatusColor = (status) => {
   return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
 }
 
-// Interview Scheduling Modal Component
-const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSuccess }) => {
+// Interview Scheduling/Editing Modal Component - FIXED
+const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSuccess, editingInterview = null }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [interviewForm, setInterviewForm] = useState({
     title: '',
@@ -59,21 +59,34 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
     notes: ''
   })
 
-  // Reset form when modal opens/closes
+  // Reset form when modal opens/closes or when editing interview changes
   useEffect(() => {
     if (isOpen) {
-      setInterviewForm({
-        title: '',
-        description: '',
-        scheduledAt: '',
-        duration: 60,
-        meetingLink: '',
-        notes: ''
-      })
+      if (editingInterview) {
+        // Populate form with existing interview data
+        setInterviewForm({
+          title: editingInterview.title || '',
+          description: editingInterview.description || '',
+          scheduledAt: editingInterview.scheduledAt ? new Date(editingInterview.scheduledAt).toISOString().slice(0, 16) : '',
+          duration: editingInterview.duration || 60,
+          meetingLink: editingInterview.meetingLink || '',
+          notes: editingInterview.notes || ''
+        })
+      } else {
+        // Reset for new interview
+        setInterviewForm({
+          title: '',
+          description: '',
+          scheduledAt: '',
+          duration: 60,
+          meetingLink: '',
+          notes: ''
+        })
+      }
     }
-  }, [isOpen])
+  }, [isOpen, editingInterview])
 
-  const handleScheduleInterview = async (e) => {
+  const handleSubmitInterview = async (e) => {
     e.preventDefault()
     
     if (!interviewForm.title || !interviewForm.scheduledAt) {
@@ -84,26 +97,33 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
     try {
       setIsSubmitting(true)
       
-      const response = await fetch('/api/recruiter/interviews', {
-        method: 'POST',
+      const url = editingInterview 
+        ? '/api/recruiter/interviews' 
+        : '/api/recruiter/interviews'
+      
+      const method = editingInterview ? 'PUT' : 'POST'
+      
+      const payload = editingInterview 
+        ? { interviewId: editingInterview.id, ...interviewForm }
+        : { candidateId: candidate.id, ...interviewForm }
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          candidateId: candidate.id,
-          ...interviewForm
-        })
+        body: JSON.stringify(payload)
       })
 
       if (response.ok) {
         const data = await response.json()
-        toast.success('Interview scheduled successfully!')
+        toast.success(editingInterview ? 'Interview updated successfully!' : 'Interview scheduled successfully!')
         onScheduleSuccess(data.interview)
         onClose()
       } else {
         const error = await response.json()
-        toast.error(error.message || 'Failed to schedule interview')
+        toast.error(error.message || `Failed to ${editingInterview ? 'update' : 'schedule'} interview`)
       }
     } catch (error) {
-      console.error('Error scheduling interview:', error)
+      console.error(`Error ${editingInterview ? 'updating' : 'scheduling'} interview:`, error)
       toast.error('Something went wrong')
     } finally {
       setIsSubmitting(false)
@@ -130,8 +150,12 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-xl">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-xl font-bold mb-1">Schedule Interview</h3>
-              <p className="text-blue-100">with {candidate?.name}</p>
+              <h3 className="text-xl font-bold mb-1">
+                {editingInterview ? 'Reschedule Interview' : 'Schedule Interview'}
+              </h3>
+              <p className="text-blue-100">
+                {editingInterview ? `Updating "${editingInterview.title}"` : `with ${candidate?.name}`}
+              </p>
             </div>
             <button
               onClick={onClose}
@@ -145,7 +169,7 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
 
         {/* Form */}
         <div className="p-6">
-          <form onSubmit={handleScheduleInterview} className="space-y-6">
+          <form onSubmit={handleSubmitInterview} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -256,12 +280,12 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
                 {isSubmitting ? (
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Scheduling...
+                    {editingInterview ? 'Updating...' : 'Scheduling...'}
                   </div>
                 ) : (
                   <>
                     <Calendar className="w-4 h-4 inline mr-2" />
-                    Schedule Interview
+                    {editingInterview ? 'Update Interview' : 'Schedule Interview'}
                   </>
                 )}
               </button>
@@ -273,7 +297,7 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
   )
 }
 
-// Candidate Form Component
+// Candidate Form Component (unchanged, keeping existing implementation)
 const CandidateForm = ({ candidate, onSubmit, onCancel, teamMembers, isAdmin, isUploading }) => {
   const [formData, setFormData] = useState({
     name: candidate?.name || '',
@@ -618,7 +642,7 @@ const CandidateManagement = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [recruiterFilter, setRecruiterFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('newest')
+  const [sortBy, setSortBy] = useState('priority') // Default to priority sorting
   const [expandedCards, setExpandedCards] = useState(new Set())
 
   // Modals
@@ -627,10 +651,59 @@ const CandidateManagement = () => {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showInterviewModal, setShowInterviewModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
-  const [showPlacementModal, setShowPlacementModal] = useState(false) // NEW
+  const [showPlacementModal, setShowPlacementModal] = useState(false)
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [selectedInterview, setSelectedInterview] = useState(null)
+  const [editingInterview, setEditingInterview] = useState(null) // NEW: For reschedule
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // NEW: Priority calculation helper
+  const getCandidatePriority = useCallback((candidate) => {
+    if (!candidate.interviews || candidate.interviews.length === 0) {
+      // Candidates without interviews - lowest priority
+      if (candidate.status === 'PLACED') return 5
+      return 6
+    }
+
+    const now = new Date()
+    
+    // Check for upcoming interviews
+    const upcomingInterviews = candidate.interviews.filter(interview => 
+      new Date(interview.scheduledAt) > now && 
+      ['SCHEDULED', 'CONFIRMED'].includes(interview.status)
+    )
+    
+    if (upcomingInterviews.length > 0) {
+      return 1 // Highest priority - upcoming interviews
+    }
+
+    // Check for interviews needing feedback
+    const needsFeedbackInterviews = candidate.interviews.filter(interview => {
+      const interviewTime = new Date(interview.scheduledAt)
+      const interviewEndTime = new Date(interviewTime.getTime() + (interview.duration * 60 * 1000))
+      
+      return interviewEndTime <= now && 
+             interview.status !== 'CANCELLED' && 
+             !interview.feedbackSubmitted
+    })
+    
+    if (needsFeedbackInterviews.length > 0) {
+      return 2 // Second priority - pending feedback
+    }
+
+    // Placed candidates
+    if (candidate.status === 'PLACED') {
+      return 3 // Third priority
+    }
+
+    // Active candidates with completed interviews
+    if (candidate.status === 'ACTIVE') {
+      return 4 // Fourth priority
+    }
+
+    // Other statuses
+    return 5 // Lower priority
+  }, [])
 
   // API Functions
   const fetchData = async () => {
@@ -836,6 +909,14 @@ const CandidateManagement = () => {
 
   const handleScheduleInterview = (candidate) => {
     setSelectedCandidate(candidate)
+    setEditingInterview(null) // Clear any editing state
+    setShowInterviewModal(true)
+  }
+
+  // NEW: Handle interview reschedule
+  const handleRescheduleInterview = (interview, candidate) => {
+    setSelectedCandidate(candidate)
+    setEditingInterview(interview)
     setShowInterviewModal(true)
   }
 
@@ -846,31 +927,54 @@ const CandidateManagement = () => {
     setShowFeedbackModal(true)
   }
 
-  // NEW: Handle placement management
+  // Handle placement management
   const handleManagePlacement = (candidate) => {
     setSelectedCandidate(candidate)
     setShowPlacementModal(true)
   }
 
-  const handleInterviewScheduleSuccess = (newInterview) => {
+  const handleInterviewScheduleSuccess = (interviewData) => {
     // Update the candidate's interviews in local state
     setCandidates(prevCandidates => 
-      prevCandidates.map(candidate => 
-        candidate.id === newInterview.candidateId 
-          ? { 
-              ...candidate, 
-              interviews: [...(candidate.interviews || []), newInterview]
+      prevCandidates.map(candidate => {
+        if (candidate.id === interviewData.candidateId) {
+          // If it's an update (reschedule), replace the existing interview
+          if (editingInterview) {
+            return {
+              ...candidate,
+              interviews: candidate.interviews.map(interview =>
+                interview.id === editingInterview.id ? interviewData : interview
+              )
             }
-          : candidate
-      )
+          } else {
+            // If it's new, add to the list
+            return { 
+              ...candidate, 
+              interviews: [...(candidate.interviews || []), interviewData]
+            }
+          }
+        }
+        return candidate
+      })
     )
     
     // Also update selectedCandidate if it's the same candidate
-    if (selectedCandidate?.id === newInterview.candidateId) {
-      setSelectedCandidate(prev => ({
-        ...prev,
-        interviews: [...(prev.interviews || []), newInterview]
-      }))
+    if (selectedCandidate?.id === interviewData.candidateId) {
+      setSelectedCandidate(prev => {
+        if (editingInterview) {
+          return {
+            ...prev,
+            interviews: prev.interviews.map(interview =>
+              interview.id === editingInterview.id ? interviewData : interview
+            )
+          }
+        } else {
+          return {
+            ...prev,
+            interviews: [...(prev.interviews || []), interviewData]
+          }
+        }
+      })
     }
   }
 
@@ -904,7 +1008,7 @@ const CandidateManagement = () => {
     setSelectedInterview(null)
   }
 
-  // NEW: Handle placement update success
+  // Handle placement update success
   const handlePlacementUpdate = (updatedPlacement) => {
     // Update candidates list
     setCandidates(prevCandidates => 
@@ -964,7 +1068,7 @@ const CandidateManagement = () => {
     return CANDIDATE_STATUSES.find(s => s.value === status)?.color || 'bg-gray-100 text-gray-800'
   }
 
-  // Filtered and Sorted Candidates
+  // NEW: Enhanced Filtered and Sorted Candidates with Priority
   const filteredCandidates = useMemo(() => {
     return candidates
       .filter(candidate => {
@@ -977,6 +1081,18 @@ const CandidateManagement = () => {
       })
       .sort((a, b) => {
         switch (sortBy) {
+          case 'priority': {
+            // NEW: Priority-based sorting
+            const priorityA = getCandidatePriority(a)
+            const priorityB = getCandidatePriority(b)
+            
+            if (priorityA !== priorityB) {
+              return priorityA - priorityB // Lower number = higher priority
+            }
+            
+            // If same priority, sort by created date (newest first)
+            return new Date(b.createdAt) - new Date(a.createdAt)
+          }
           case 'newest': return new Date(b.createdAt) - new Date(a.createdAt)
           case 'oldest': return new Date(a.createdAt) - new Date(b.createdAt)
           case 'name': return a.name.localeCompare(b.name)
@@ -984,7 +1100,7 @@ const CandidateManagement = () => {
           default: return 0
         }
       })
-  }, [candidates, searchTerm, statusFilter, recruiterFilter, sortBy])
+  }, [candidates, searchTerm, statusFilter, recruiterFilter, sortBy, getCandidatePriority])
 
   // Effects
   useEffect(() => {
@@ -1070,6 +1186,7 @@ const CandidateManagement = () => {
             onChange={(e) => setSortBy(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
+            <option value="priority">Smart Priority</option>
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
             <option value="name">Name A-Z</option>
@@ -1108,8 +1225,9 @@ const CandidateManagement = () => {
                 setShowEditModal(true)
               }}
               onScheduleInterview={handleScheduleInterview}
+              onRescheduleInterview={handleRescheduleInterview} // NEW: Pass reschedule handler
               onManagePlacement={handleManagePlacement}
-              onInterviewFeedback={handleInterviewFeedback} // NEW: Pass feedback handler
+              onInterviewFeedback={handleInterviewFeedback}
               isExpanded={expandedCards.has(candidate.id)}
               onToggleExpand={toggleExpanded}
               isAdmin={isAdmin}
@@ -1188,7 +1306,7 @@ const CandidateManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* Interview Scheduling Modal */}
+      {/* Interview Scheduling/Editing Modal */}
       <AnimatePresence>
         {showInterviewModal && (
           <InterviewSchedulingModal
@@ -1196,8 +1314,10 @@ const CandidateManagement = () => {
             onClose={() => {
               setShowInterviewModal(false)
               setSelectedCandidate(null)
+              setEditingInterview(null) // Clear editing state
             }}
             candidate={selectedCandidate}
+            editingInterview={editingInterview} // Pass editing interview
             onScheduleSuccess={handleInterviewScheduleSuccess}
           />
         )}
@@ -1220,7 +1340,7 @@ const CandidateManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* NEW: Placement Management Modal */}
+      {/* Placement Management Modal */}
       <AnimatePresence>
         {showPlacementModal && selectedCandidate && (
           <PlacementManagement
@@ -1235,7 +1355,7 @@ const CandidateManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* Candidate Detail Modal */}
+      {/* Candidate Detail Modal - Rest of the component remains the same */}
       <AnimatePresence>
         {showDetailModal && selectedCandidate && (
           <motion.div
@@ -1406,6 +1526,18 @@ const CandidateManagement = () => {
                                   title="Add Feedback"
                                 >
                                   <MessageSquare className="w-4 h-4" />
+                                </button>
+                              )}
+                              {isUpcoming && (
+                                <button
+                                  onClick={() => {
+                                    setShowDetailModal(false)
+                                    handleRescheduleInterview(interview, selectedCandidate)
+                                  }}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-md"
+                                  title="Reschedule"
+                                >
+                                  <Edit className="w-4 h-4" />
                                 </button>
                               )}
                               {interview.meetingLink && (
