@@ -1,4 +1,4 @@
-// app/api/recruiter/interviews/route.js (Updated for Admin Access)
+// app/api/recruiter/interviews/route.js - Updated with Feedback Support
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
@@ -49,6 +49,8 @@ export async function GET(request) {
     const scheduledBy = searchParams.get('scheduledBy') // Filter by recruiter who scheduled
     const fromDate = searchParams.get('fromDate')
     const toDate = searchParams.get('toDate')
+    const hasFeedback = searchParams.get('hasFeedback') // Filter by feedback status
+    const outcome = searchParams.get('outcome') // Filter by feedback outcome
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -99,7 +101,7 @@ export async function GET(request) {
       }
     }
 
-    // FIXED: Handle comma-separated status values
+    // Handle comma-separated status values
     if (status) {
       const statusValues = status.split(',').map(s => s.trim())
       if (statusValues.length === 1) {
@@ -121,7 +123,22 @@ export async function GET(request) {
       }
     }
 
-    // Fetch interviews with full details
+    // NEW: Filter by feedback status
+    if (hasFeedback !== null) {
+      if (hasFeedback === 'true') {
+        whereClause.feedbackSubmitted = true
+      } else if (hasFeedback === 'false') {
+        whereClause.feedbackSubmitted = false
+      }
+    }
+
+    // NEW: Filter by feedback outcome
+    if (outcome) {
+      whereClause.outcome = outcome
+      whereClause.feedbackSubmitted = true // Only show interviews with feedback
+    }
+
+    // Fetch interviews with full details including feedback
     const interviews = await prisma.interview.findMany({
       where: whereClause,
       include: {
@@ -149,6 +166,14 @@ export async function GET(request) {
             name: true,
             email: true
           }
+        },
+        // NEW: Include feedback submitter details
+        feedbackSubmitter: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       },
       orderBy: { scheduledAt: 'asc' },
@@ -161,7 +186,13 @@ export async function GET(request) {
       ...interview,
       canEdit: isAdmin || interview.scheduledById === session.user.id,
       canDelete: isAdmin || interview.scheduledById === session.user.id,
-      canReschedule: isAdmin || interview.scheduledById === session.user.id
+      canReschedule: isAdmin || interview.scheduledById === session.user.id,
+      // NEW: Feedback permissions
+      canSubmitFeedback: (isAdmin || interview.scheduledById === session.user.id || interview.candidate.addedById === session.user.id) && 
+                        !interview.feedbackSubmitted && 
+                        new Date(interview.scheduledAt.getTime() + (interview.duration * 60 * 1000)) <= new Date(),
+      canViewFeedback: interview.feedbackSubmitted && 
+                      (isAdmin || interview.scheduledById === session.user.id || interview.candidate.addedById === session.user.id || interview.feedbackSubmittedById === session.user.id)
     }))
 
     // Get total count
@@ -185,6 +216,23 @@ export async function GET(request) {
       _count: { status: true }
     })
 
+    // NEW: Get feedback statistics
+    const feedbackStats = await prisma.interview.groupBy({
+      by: ['outcome'],
+      where: {
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } },
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          }
+        ],
+        feedbackSubmitted: true
+      },
+      _count: { outcome: true }
+    })
+
     // Get upcoming interviews (next 7 days)
     const upcomingInterviews = await prisma.interview.count({
       where: {
@@ -202,6 +250,27 @@ export async function GET(request) {
         },
         status: {
           in: ['SCHEDULED', 'CONFIRMED']
+        }
+      }
+    })
+
+    // NEW: Get interviews needing feedback (past interviews without feedback)
+    const needingFeedback = await prisma.interview.count({
+      where: {
+        OR: [
+          { scheduledById: { in: allowedRecruiterIds } },
+          { 
+            candidate: {
+              addedById: { in: allowedRecruiterIds }
+            }
+          }
+        ],
+        scheduledAt: {
+          lt: new Date()
+        },
+        feedbackSubmitted: false,
+        status: {
+          not: 'CANCELLED'
         }
       }
     })
@@ -244,9 +313,15 @@ export async function GET(request) {
       stats: {
         total: totalCount,
         upcoming: upcomingInterviews,
+        needingFeedback, // NEW
         statusDistribution: statusStats.map(item => ({
           status: item.status,
           count: item._count.status
+        })),
+        // NEW: Feedback outcome distribution
+        feedbackDistribution: feedbackStats.map(item => ({
+          outcome: item.outcome,
+          count: item._count.outcome
         })),
         recruiterDistribution: recruiterStats
       },
@@ -265,6 +340,7 @@ export async function GET(request) {
   }
 }
 
+// POST method remains the same as before
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions)
@@ -456,6 +532,7 @@ export async function POST(request) {
   }
 }
 
+// PUT and DELETE methods remain the same as the original implementation
 export async function PUT(request) {
   try {
     const session = await getServerSession(authOptions)
@@ -632,6 +709,14 @@ export async function PUT(request) {
           }
         },
         scheduledBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        // NEW: Include feedback submitter if exists
+        feedbackSubmitter: {
           select: {
             id: true,
             name: true,

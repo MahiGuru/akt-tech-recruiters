@@ -84,8 +84,9 @@ model User {
   addedCandidates       Candidate[] @relation("RecruiterAddedCandidate")
   recruiterApplications Application[] @relation("RecruiterSubmittedApplication")
   
-  // NEW: Interview management
+  // Interview management
   scheduledInterviews   Interview[] @relation("RecruiterScheduledInterview")
+  feedbackSubmissions   Interview[] @relation("InterviewFeedbackSubmitter")
 
   @@map("users")
 }
@@ -128,14 +129,13 @@ model Candidate {
   
   resumes      Resume[]
   applications Application[]
-  // NEW: Interview scheduling
   interviews   Interview[]
   
   @@unique([email, addedById]) // Prevent duplicate candidates by same recruiter
   @@map("candidates")
 }
 
-// NEW: Interview model
+// Interview model with feedback fields
 model Interview {
   id           String          @id @default(cuid())
   title        String          // Interview title (e.g., "Technical Interview", "HR Round")
@@ -149,12 +149,31 @@ model Interview {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   
+  // NEW: Feedback fields
+  outcome                 String?        // EXCELLENT, GOOD, AVERAGE, POOR
+  overallRating          Int?           // 1-5 rating
+  technicalRating        Int?           // 1-5 rating
+  communicationRating    Int?           // 1-5 rating
+  culturalFitRating      Int?           // 1-5 rating
+  strengths              String?        // Positive aspects
+  weaknesses             String?        // Areas for improvement
+  feedback               String?        // Detailed feedback
+  nextSteps              String?        // Recommended next steps
+  recommendations        String?        // Additional recommendations
+  wouldRecommendHiring   Boolean?       // Hiring recommendation
+  feedbackSubmitted      Boolean        @default(false)
+  feedbackSubmittedAt    DateTime?      // When feedback was submitted
+  feedbackSubmittedById  String?        // Who submitted the feedback
+  
   // Relations
   candidateId  String
   candidate    Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   
   scheduledById String         // Recruiter who scheduled the interview
   scheduledBy   User           @relation("RecruiterScheduledInterview", fields: [scheduledById], references: [id])
+  
+  // NEW: Feedback submitter relation
+  feedbackSubmitter User?      @relation("InterviewFeedbackSubmitter", fields: [feedbackSubmittedById], references: [id])
   
   @@map("interviews")
 }
@@ -167,7 +186,7 @@ model Notification {
   isRead      Boolean            @default(false)
   senderId    String?            // Optional for system notifications
   receiverId  String
-  // NEW: Interview reminder fields
+  // Interview reminder fields
   interviewId String?            // Link to interview for reminder notifications
   scheduledFor DateTime?         // When to send the notification
   createdAt   DateTime           @default(now())
@@ -179,7 +198,6 @@ model Notification {
   
   @@map("notifications")
 }
-
 
 model Job {
   id          String   @id @default(cuid())
@@ -289,7 +307,7 @@ enum NotificationType {
   SUCCESS
   ERROR
   APPROVAL_REQUEST
-  INTERVIEW_REMINDER  // NEW: For interview notifications
+  INTERVIEW_REMINDER
 }
 
 enum JobType {
@@ -316,7 +334,6 @@ enum CandidateStatus {
   DO_NOT_CONTACT
 }
 
-// NEW: Interview status enum
 enum InterviewStatus {
   SCHEDULED
   CONFIRMED
