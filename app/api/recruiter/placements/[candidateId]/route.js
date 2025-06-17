@@ -140,8 +140,8 @@ export async function POST(request, { params }) {
     const body = await request.json()
 
     // Validate required fields
-    const { salary, clientCompany, jobTitle } = body
-    if (!salary || !clientCompany || !jobTitle) {
+    const { salary, clientCompany } = body
+    if (!salary || !clientCompany) {
       return NextResponse.json(
         { message: 'Salary, client company, and job title are required' },
         { status: 400 }
@@ -224,7 +224,7 @@ export async function POST(request, { params }) {
           paymentTerms: body.paymentTerms || null,
           
           // Placement info
-          jobTitle,
+          jobTitle: body.jobTitle || null,
           startDate: body.startDate ? new Date(body.startDate) : null,
           endDate: body.endDate ? new Date(body.endDate) : null,
           placementType: body.placementType || 'PERMANENT',

@@ -95,11 +95,9 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
       description: 'Manage interviews'
     },
     {
-      title: 'Placement Rate',
-      value: stats.total > 0 
-        ? `${Math.round(((stats.candidatesByStatus?.PLACED || 0) / stats.total) * 100)}%`
-        : '0%',
-      subtitle: `${stats.candidatesByStatus?.PLACED || 0} placed`,
+      title: 'Placements',
+      value: stats.candidatesByStatus?.PLACED || 0,
+      subtitle: `Placed`,
       icon: Target,
       color: 'orange',
       trend: 'Stable',
@@ -122,23 +120,12 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
         isPositive: true,
         targetTab: 'team',
         description: 'Manage team members'
-      },
-      {
-        title: 'Completed Interviews',
-        value: completedInterviews,
-        subtitle: 'This month',
-        icon: CheckCircle,
-        color: 'emerald',
-        trend: '+15%',
-        isPositive: true,
-        targetTab: 'analytics',
-        description: 'View analytics'
       }
     )
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
+    <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5 gap-5 mb-8">
       {enhancedStats.map((stat, index) => (
         <motion.div
           key={stat.title}
@@ -191,7 +178,7 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
             </div>
           )}
 
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-center mb-3">
             <div className={`
               w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200
               ${stat.color === 'blue' ? 'bg-blue-100 text-blue-600 group-hover:bg-blue-200' :
@@ -206,33 +193,19 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
               <stat.icon className="w-6 h-6" />
             </div>
             
-            {/* Trend indicator */}
-            <div className={`
-              flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
-              ${stat.isPositive 
-                ? 'bg-green-100 text-green-700' 
-                : 'bg-red-100 text-red-700'
-              }
-            `}>
-              {stat.isPositive ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <Activity className="w-3 h-3" />
-              )}
-              {stat.trend}
-            </div>
+            {/* Trend indicator */} 
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+            <p className="text-sm text-center font-medium text-gray-600">{stat.title}</p>
             <p className={`
-              text-2xl font-bold transition-colors duration-200
+              text-2xl text-center font-bold transition-colors duration-200
               ${stat.urgent ? 'text-orange-900' : 'text-gray-900'}
             `}>
               {stat.value}
             </p>
             <p className={`
-              text-sm transition-colors duration-200
+              text-sm transition-colors  text-center duration-200
               ${stat.urgent ? 'text-orange-700' : 'text-gray-500'}
             `}>
               {stat.subtitle}
@@ -241,7 +214,7 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
 
           {/* Special indicators for interview-related stats */}
           {stat.title === 'Upcoming Interviews' && upcomingInterviews > 0 && (
-            <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="mt-3 pt-3 border-t border-gray-200  text-center">
               <div className="flex items-center gap-2 text-xs text-gray-600">
                 <Timer className="w-3 h-3" />
                 <span>Next: Today</span>

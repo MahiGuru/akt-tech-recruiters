@@ -1,4 +1,3 @@
-// app/(client)/components/PlacementManagement.js - Manage placement details
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -114,9 +113,8 @@ const PlacementManagement = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
-    if (!placementData.salary || !placementData.clientCompany || !placementData.jobTitle) {
-      toast.error('Salary, client company, and job title are required')
+    if (!placementData.salary || !placementData.clientCompany ) {
+      toast.error('Salary, client company are required')
       return
     }
 
