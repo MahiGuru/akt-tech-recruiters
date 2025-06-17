@@ -1,4 +1,4 @@
-// app/(client)/components/CandidateManagement.js - Updated with Interview Feedback
+// app/(client)/components/CandidateManagement.js - Complete Updated Version
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -12,8 +12,10 @@ import {
   Award, Target
 } from 'lucide-react'
 
-// Import the new feedback modal
+// Import the new components
 import InterviewFeedbackModal from './InterviewFeedbackModal'
+import PlacementManagement from './PlacementManagement'
+import EnhancedCandidateCard from './EnhancedCandidateCard'
 
 // Constants
 const CANDIDATE_STATUSES = [
@@ -45,7 +47,7 @@ const getInterviewStatusColor = (status) => {
   return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
 }
 
-// Interview Scheduling Modal Component (keeping existing)
+// Interview Scheduling Modal Component
 const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [interviewForm, setInterviewForm] = useState({
@@ -271,7 +273,7 @@ const InterviewSchedulingModal = ({ isOpen, onClose, candidate, onScheduleSucces
   )
 }
 
-// Candidate Form Component (keeping existing structure)
+// Candidate Form Component
 const CandidateForm = ({ candidate, onSubmit, onCancel, teamMembers, isAdmin, isUploading }) => {
   const [formData, setFormData] = useState({
     name: candidate?.name || '',
@@ -624,9 +626,10 @@ const CandidateManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [showInterviewModal, setShowInterviewModal] = useState(false)
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false) // NEW
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+  const [showPlacementModal, setShowPlacementModal] = useState(false) // NEW
   const [selectedCandidate, setSelectedCandidate] = useState(null)
-  const [selectedInterview, setSelectedInterview] = useState(null) // NEW
+  const [selectedInterview, setSelectedInterview] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // API Functions
@@ -836,11 +839,17 @@ const CandidateManagement = () => {
     setShowInterviewModal(true)
   }
 
-  // NEW: Handle interview feedback
+  // Handle interview feedback
   const handleInterviewFeedback = (interview, candidate) => {
     setSelectedInterview(interview)
     setSelectedCandidate(candidate)
     setShowFeedbackModal(true)
+  }
+
+  // NEW: Handle placement management
+  const handleManagePlacement = (candidate) => {
+    setSelectedCandidate(candidate)
+    setShowPlacementModal(true)
   }
 
   const handleInterviewScheduleSuccess = (newInterview) => {
@@ -865,7 +874,7 @@ const CandidateManagement = () => {
     }
   }
 
-  // NEW: Handle feedback submission success
+  // Handle feedback submission success
   const handleFeedbackSubmitSuccess = (updatedInterview) => {
     // Update candidates with the updated interview
     setCandidates(prevCandidates => 
@@ -893,6 +902,31 @@ const CandidateManagement = () => {
 
     setShowFeedbackModal(false)
     setSelectedInterview(null)
+  }
+
+  // NEW: Handle placement update success
+  const handlePlacementUpdate = (updatedPlacement) => {
+    // Update candidates list
+    setCandidates(prevCandidates => 
+      prevCandidates.map(candidate => 
+        candidate.id === updatedPlacement.candidateId 
+          ? { 
+              ...candidate, 
+              status: 'PLACED', // Ensure status is updated
+              placement: updatedPlacement
+            }
+          : candidate
+      )
+    )
+    
+    // Update selected candidate if it's the same one
+    if (selectedCandidate?.id === updatedPlacement.candidateId) {
+      setSelectedCandidate(prev => ({
+        ...prev,
+        status: 'PLACED',
+        placement: updatedPlacement
+      }))
+    }
   }
 
   const handleDeleteResume = async (resumeId, resumeTitle) => {
@@ -928,63 +962,6 @@ const CandidateManagement = () => {
 
   const getStatusColor = (status) => {
     return CANDIDATE_STATUSES.find(s => s.value === status)?.color || 'bg-gray-100 text-gray-800'
-  }
-
-  // Get upcoming interviews for a candidate
-  const getUpcomingInterviews = (candidate) => {
-    if (!candidate.interviews) return []
-    return candidate.interviews.filter(interview => 
-      new Date(interview.scheduledAt) > new Date() && 
-      ['SCHEDULED', 'CONFIRMED'].includes(interview.status)
-    )
-  }
-
-  // NEW: Get completed/past interviews for feedback
-  const getCompletedInterviews = (candidate) => {
-    if (!candidate.interviews) return []
-    return candidate.interviews.filter(interview => {
-      const interviewTime = new Date(interview.scheduledAt)
-      const now = new Date()
-      const interviewEndTime = new Date(interviewTime.getTime() + (interview.duration * 60 * 1000))
-      
-      return interviewEndTime <= now && interview.status !== 'CANCELLED'
-    })
-  }
-
-  // NEW: Get interviews eligible for feedback (completed but no feedback yet)
-  const getInterviewsNeedingFeedback = (candidate) => {
-    if (!candidate.interviews) return []
-    return candidate.interviews.filter(interview => {
-      const interviewTime = new Date(interview.scheduledAt)
-      const now = new Date()
-      const interviewEndTime = new Date(interviewTime.getTime() + (interview.duration * 60 * 1000))
-      
-      return interviewEndTime <= now && 
-             interview.status !== 'CANCELLED' && 
-             interview.status !== 'COMPLETED' && // Not yet marked as completed with feedback
-             !interview.feedback // No feedback submitted yet
-    })
-  }
-
-  // Format time until interview
-  const getTimeUntilInterview = (scheduledAt) => {
-    const now = new Date()
-    const interviewTime = new Date(scheduledAt)
-    const diff = interviewTime - now
-    
-    if (diff < 0) return 'Past'
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-    
-    if (hours > 24) {
-      const days = Math.floor(hours / 24)
-      return `${days} day${days > 1 ? 's' : ''}`
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m`
-    } else {
-      return `${minutes}m`
-    }
   }
 
   // Filtered and Sorted Candidates
@@ -1121,416 +1098,23 @@ const CandidateManagement = () => {
             </button>
           </div>
         ) : (
-          filteredCandidates.map((candidate, index) => {
-            const upcomingInterviews = getUpcomingInterviews(candidate)
-            const interviewsNeedingFeedback = getInterviewsNeedingFeedback(candidate) // NEW
-            
-            return (
-              <motion.div
-                key={candidate.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="bg-white rounded-lg border hover:shadow-md transition-shadow"
-              >
-                <div className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Users className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{candidate.name}</h3>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
-                            {candidate.status.replace('_', ' ')}
-                          </span>
-                          {isAdmin && (
-                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                              {candidate.addedBy?.name}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <div className="flex items-center gap-1">
-                            <Mail className="w-4 h-4" />
-                            {candidate.email}
-                          </div>
-                          {candidate.phone && (
-                            <div className="flex items-center gap-1">
-                              <Phone className="w-4 h-4" />
-                              {candidate.phone}
-                            </div>
-                          )}
-                          {candidate.location && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {candidate.location}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Upcoming Interview Details */}
-                        {upcomingInterviews.length > 0 && (
-                          <div className="mt-3 p-3 bg-gradient-to-r from-green-50 to-blue-50 rounded-lg border border-green-200">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center">
-                                  <Calendar className="w-3 h-3 text-green-600" />
-                                </div>
-                                <span className="text-sm font-medium text-green-800">
-                                  {upcomingInterviews.length} Upcoming Interview{upcomingInterviews.length > 1 ? 's' : ''}
-                                </span>
-                              </div>
-                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                                <Timer className="w-3 h-3 inline mr-1" />
-                                {getTimeUntilInterview(upcomingInterviews[0].scheduledAt)}
-                              </span>
-                            </div>
-                            
-                            {/* Next Interview Details */}
-                            <div className="space-y-2">
-                              {upcomingInterviews.slice(0, 2).map((interview, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-md border border-green-100">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h5 className="text-sm font-medium text-gray-900">{interview.title}</h5>
-                                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getInterviewStatusColor(interview.status)}`}>
-                                        {interview.status.replace('_', ' ')}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-4 text-xs text-gray-600">
-                                      <div className="flex items-center gap-1">
-                                        <Calendar className="w-3 h-3" />
-                                        <span>{new Date(interview.scheduledAt).toLocaleDateString('en-US', { 
-                                          month: 'short', 
-                                          day: 'numeric',
-                                          year: new Date(interview.scheduledAt).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
-                                        })}</span>
-                                      </div>
-                                      <div className="flex items-center gap-1">
-                                        <Clock className="w-3 h-3" />
-                                        <span>{new Date(interview.scheduledAt).toLocaleTimeString([], { 
-                                          hour: '2-digit', 
-                                          minute: '2-digit' 
-                                        })}</span>
-                                      </div>
-                                      <span>({interview.duration} min)</span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    {interview.meetingLink && (
-                                      <a 
-                                        href={interview.meetingLink} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                        title="Join Meeting"
-                                      >
-                                        <Video className="w-3 h-3" />
-                                      </a>
-                                    )}
-                                    <div className="text-right">
-                                      <div className="text-xs font-medium text-blue-600">
-                                        {getTimeUntilInterview(interview.scheduledAt)}
-                                      </div>
-                                      <div className="text-xs text-gray-500">remaining</div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                              
-                              {upcomingInterviews.length > 2 && (
-                                <div className="text-center">
-                                  <span className="text-xs text-gray-500">
-                                    +{upcomingInterviews.length - 2} more interview{upcomingInterviews.length - 2 > 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* NEW: Interviews Needing Feedback */}
-                        {interviewsNeedingFeedback.length > 0 && (
-                          <div className="mt-3 p-3 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-200">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-                                  <MessageSquare className="w-3 h-3 text-orange-600" />
-                                </div>
-                                <span className="text-sm font-medium text-orange-800">
-                                  {interviewsNeedingFeedback.length} Interview{interviewsNeedingFeedback.length > 1 ? 's' : ''} Need Feedback
-                                </span>
-                              </div>
-                              <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-                                <AlertCircle className="w-3 h-3 inline mr-1" />
-                                Action Required
-                              </span>
-                            </div>
-                            
-                            <div className="space-y-2">
-                              {interviewsNeedingFeedback.slice(0, 2).map((interview, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-md border border-orange-100">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h5 className="text-sm font-medium text-gray-900">{interview.title}</h5>
-                                      <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
-                                        Completed
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-4 text-xs text-gray-600">
-                                      <span>{new Date(interview.scheduledAt).toLocaleDateString()}</span>
-                                      <span>{new Date(interview.scheduledAt).toLocaleTimeString([], { 
-                                        hour: '2-digit', 
-                                        minute: '2-digit' 
-                                      })}</span>
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleInterviewFeedback(interview, candidate)}
-                                    className="flex items-center gap-1 px-3 py-1 bg-orange-600 text-white rounded-md hover:bg-orange-700 text-xs"
-                                  >
-                                    <MessageSquare className="w-3 h-3" />
-                                    Add Feedback
-                                  </button>
-                                </div>
-                              ))}
-                              
-                              {interviewsNeedingFeedback.length > 2 && (
-                                <div className="text-center">
-                                  <span className="text-xs text-gray-500">
-                                    +{interviewsNeedingFeedback.length - 2} more interview{interviewsNeedingFeedback.length - 2 > 1 ? 's' : ''} need feedback
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleScheduleInterview(candidate)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-md"
-                        title="Schedule Interview"
-                      >
-                        <Calendar className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleViewDetails(candidate)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-md"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedCandidate(candidate)
-                          setShowEditModal(true)
-                        }}
-                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-md"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => toggleExpanded(candidate.id)}
-                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-md"
-                      >
-                        {expandedCards.has(candidate.id) ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded Content */}
-                  <AnimatePresence>
-                    {expandedCards.has(candidate.id) && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-4 pt-4 border-t border-gray-200"
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Skills</h4>
-                            {candidate.skills && candidate.skills.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {candidate.skills.slice(0, 5).map((skill, idx) => (
-                                  <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                                    {skill}
-                                  </span>
-                                ))}
-                                {candidate.skills.length > 5 && (
-                                  <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                    +{candidate.skills.length - 5} more
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500">No skills listed</p>
-                            )}
-                          </div>
-
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Quick Stats</h4>
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-gray-400" />
-                                <span>{candidate.resumes?.length || 0} resumes</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-gray-400" />
-                                <span>{candidate.interviews?.length || 0} interviews</span>
-                                {upcomingInterviews.length > 0 && (
-                                  <span className="text-green-600">({upcomingInterviews.length} upcoming)</span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Briefcase className="w-4 h-4 text-gray-400" />
-                                <span>{candidate.applications?.length || 0} applications</span>
-                              </div>
-                              {/* NEW: Feedback stats */}
-                              {interviewsNeedingFeedback.length > 0 && (
-                                <div className="flex items-center gap-2">
-                                  <MessageSquare className="w-4 h-4 text-orange-400" />
-                                  <span className="text-orange-600">{interviewsNeedingFeedback.length} need feedback</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Quick Actions</h4>
-                            <div className="space-y-2">
-                              <select
-                                value={candidate.status}
-                                onChange={(e) => handleStatusUpdate(candidate.id, e.target.value, candidate.name)}
-                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              >
-                                {CANDIDATE_STATUSES.map(status => (
-                                  <option key={status.value} value={status.value}>{status.label}</option>
-                                ))}
-                              </select>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleScheduleInterview(candidate)}
-                                  className="flex-1 px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center gap-1"
-                                >
-                                  <Calendar className="w-4 h-4" />
-                                  Schedule
-                                </button>
-                                <button
-                                  onClick={() => handleViewDetails(candidate)}
-                                  className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                >
-                                  View Details
-                                </button>
-                                {(isAdmin || candidate.addedById === session?.user?.id) && (
-                                  <button
-                                    onClick={() => handleDeleteCandidate(candidate.id, candidate.name)}
-                                    className="px-3 py-2 text-sm text-red-600 border border-red-200 rounded-md hover:bg-red-50"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Interview List for this candidate */}
-                        {candidate.interviews && candidate.interviews.length > 0 && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <h4 className="font-medium text-gray-900 mb-3">
-                              Interview Schedule ({candidate.interviews.length})
-                            </h4>
-                            <div className="space-y-2">
-                              {candidate.interviews.slice(0, 3).map((interview, idx) => {
-                                const isUpcoming = new Date(interview.scheduledAt) > new Date()
-                                const timeInfo = isUpcoming 
-                                  ? getTimeUntilInterview(interview.scheduledAt)
-                                  : 'Past'
-                                const needsFeedback = getInterviewsNeedingFeedback(candidate).some(i => i.id === interview.id)
-                                
-                                return (
-                                  <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-sm">
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-2 h-2 rounded-full ${
-                                        interview.status === 'SCHEDULED' ? 'bg-blue-500' :
-                                        interview.status === 'CONFIRMED' ? 'bg-green-500' :
-                                        interview.status === 'COMPLETED' ? 'bg-purple-500' :
-                                        interview.status === 'CANCELLED' ? 'bg-red-500' :
-                                        'bg-gray-500'
-                                      }`}></div>
-                                      <div>
-                                        <p className="font-medium text-gray-900">{interview.title}</p>
-                                        <p className="text-gray-600">
-                                          {new Date(interview.scheduledAt).toLocaleDateString()} at{' '}
-                                          {new Date(interview.scheduledAt).toLocaleTimeString([], { 
-                                            hour: '2-digit', 
-                                            minute: '2-digit' 
-                                          })}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getInterviewStatusColor(interview.status)}`}>
-                                        {interview.status.replace('_', ' ')}
-                                      </span>
-                                      {/* NEW: Show feedback button for eligible interviews */}
-                                      {needsFeedback && (
-                                        <button
-                                          onClick={() => handleInterviewFeedback(interview, candidate)}
-                                          className="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700 flex items-center gap-1"
-                                          title="Add Interview Feedback"
-                                        >
-                                          <MessageSquare className="w-3 h-3" />
-                                          Feedback
-                                        </button>
-                                      )}
-                                      {isUpcoming && (
-                                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                                          <Timer className="w-3 h-3 inline mr-1" />
-                                          {timeInfo}
-                                        </span>
-                                      )}
-                                      {interview.meetingLink && (
-                                        <a 
-                                          href={interview.meetingLink} 
-                                          target="_blank" 
-                                          rel="noopener noreferrer"
-                                          className="text-blue-600 hover:text-blue-700"
-                                          title="Join Meeting"
-                                        >
-                                          <Video className="w-4 h-4" />
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                              {candidate.interviews.length > 3 && (
-                                <p className="text-sm text-gray-500 text-center">
-                                  +{candidate.interviews.length - 3} more interviews
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            )
-          })
+          filteredCandidates.map((candidate, index) => (
+            <EnhancedCandidateCard
+              key={candidate.id}
+              candidate={candidate}
+              onViewDetails={handleViewDetails}
+              onEdit={(candidate) => {
+                setSelectedCandidate(candidate)
+                setShowEditModal(true)
+              }}
+              onScheduleInterview={handleScheduleInterview}
+              onManagePlacement={handleManagePlacement}
+              onInterviewFeedback={handleInterviewFeedback} // NEW: Pass feedback handler
+              isExpanded={expandedCards.has(candidate.id)}
+              onToggleExpand={toggleExpanded}
+              isAdmin={isAdmin}
+            />
+          ))
         )}
       </div>
 
@@ -1619,7 +1203,7 @@ const CandidateManagement = () => {
         )}
       </AnimatePresence>
 
-      {/* NEW: Interview Feedback Modal */}
+      {/* Interview Feedback Modal */}
       <AnimatePresence>
         {showFeedbackModal && selectedInterview && selectedCandidate && (
           <InterviewFeedbackModal
@@ -1632,6 +1216,21 @@ const CandidateManagement = () => {
             interview={selectedInterview}
             candidate={selectedCandidate}
             onFeedbackSubmit={handleFeedbackSubmitSuccess}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* NEW: Placement Management Modal */}
+      <AnimatePresence>
+        {showPlacementModal && selectedCandidate && (
+          <PlacementManagement
+            isOpen={showPlacementModal}
+            onClose={() => {
+              setShowPlacementModal(false)
+              setSelectedCandidate(null)
+            }}
+            candidate={selectedCandidate}
+            onPlacementUpdate={handlePlacementUpdate}
           />
         )}
       </AnimatePresence>
@@ -1765,10 +1364,7 @@ const CandidateManagement = () => {
                     <div className="space-y-3">
                       {selectedCandidate.interviews.map((interview, index) => {
                         const isUpcoming = new Date(interview.scheduledAt) > new Date()
-                        const timeInfo = isUpcoming 
-                          ? getTimeUntilInterview(interview.scheduledAt)
-                          : 'Past'
-                        const needsFeedback = getInterviewsNeedingFeedback(selectedCandidate).some(i => i.id === interview.id)
+                        const needsFeedback = !interview.feedbackSubmitted && !isUpcoming
                         
                         return (
                           <div key={interview.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
@@ -1782,7 +1378,6 @@ const CandidateManagement = () => {
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getInterviewStatusColor(interview.status)}`}>
                                     {interview.status.replace('_', ' ')}
                                   </span>
-                                  {/* NEW: Show feedback indicator */}
                                   {needsFeedback && (
                                     <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
                                       <MessageSquare className="w-3 h-3 inline mr-1" />
@@ -1794,9 +1389,6 @@ const CandidateManagement = () => {
                                   <span>{new Date(interview.scheduledAt).toLocaleDateString()}</span>
                                   <span>{new Date(interview.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                   <span>{interview.duration} min</span>
-                                  {isUpcoming && (
-                                    <span className="text-green-600">in {timeInfo}</span>
-                                  )}
                                 </div>
                                 {interview.description && (
                                   <p className="text-sm text-gray-600 mt-1">{interview.description}</p>
@@ -1804,7 +1396,6 @@ const CandidateManagement = () => {
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* NEW: Add feedback button */}
                               {needsFeedback && (
                                 <button
                                   onClick={() => {

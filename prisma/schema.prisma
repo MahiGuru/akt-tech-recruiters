@@ -84,6 +84,11 @@ model User {
   addedCandidates       Candidate[] @relation("RecruiterAddedCandidate")
   recruiterApplications Application[] @relation("RecruiterSubmittedApplication")
   
+  // Placement relations
+  placementCreated      Placement[] @relation("PlacementCreatedBy")
+  placementUpdated      Placement[] @relation("PlacementUpdatedBy") 
+  placementDocuments    PlacementDocument[] @relation("PlacementDocumentUploader")
+
   // Interview management
   scheduledInterviews   Interview[] @relation("RecruiterScheduledInterview")
   feedbackSubmissions   Interview[] @relation("InterviewFeedbackSubmitter")
@@ -130,7 +135,7 @@ model Candidate {
   resumes      Resume[]
   applications Application[]
   interviews   Interview[]
-  
+  placement    Placement?
   @@unique([email, addedById]) // Prevent duplicate candidates by same recruiter
   @@map("candidates")
 }
@@ -275,6 +280,115 @@ model Resume {
   candidate      Candidate?      @relation(fields: [candidateId], references: [id])
   
   @@map("resumes")
+}
+model Placement {
+  id              String        @id @default(cuid())
+  candidateId     String        @unique
+  createdById     String
+  updatedById     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Compensation Details
+  salary          Decimal       @db.Decimal(15,2)
+  currency        String        @default("USD")
+  salaryType      SalaryType    @default(ANNUAL)
+  bonus           Decimal?      @db.Decimal(15,2)
+  commission      Decimal?      @db.Decimal(15,2)
+  benefits        String[]
+  
+  // Client Details
+  clientCompany       String
+  clientContactName   String?
+  clientContactEmail  String?
+  clientContactPhone  String?
+  clientAddress       String?
+  clientIndustry      String?
+  
+  // Vendor Details (if through agency)
+  vendorCompany       String?
+  vendorContactName   String?
+  vendorContactEmail  String?
+  vendorContactPhone  String?
+  vendorRate          Decimal?  @db.Decimal(15,2)
+  vendorCommission    Decimal?  @db.Decimal(15,2)
+  
+  // Account Details
+  accountManager      String?
+  placementFee        Decimal?  @db.Decimal(15,2)
+  feeType             FeeType?  @default(PERCENTAGE)
+  feePercentage       Decimal?  @db.Decimal(5,2)
+  paymentTerms        String?
+  
+  // Placement Details
+  jobTitle            String
+  startDate           DateTime?
+  endDate             DateTime?
+  placementType       PlacementType @default(PERMANENT)
+  workLocation        String?
+  workType            WorkType  @default(FULL_TIME)
+  reportingManager    String?
+  
+  // Additional Info
+  notes               String?
+  milestones          Json      @default("[]")
+  documents           String[]  @default([])
+  
+  // Relations
+  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdBy           User      @relation("PlacementCreatedBy", fields: [createdById], references: [id])
+  updatedBy           User      @relation("PlacementUpdatedBy", fields: [updatedById], references: [id])
+  placementDocuments  PlacementDocument[]
+  
+  @@map("placements")
+}
+
+model PlacementDocument {
+  id             String    @id @default(cuid())
+  placementId    String
+  filename       String
+  originalName   String
+  url            String
+  fileSize       Int
+  mimeType       String
+  documentType   String?   // CONTRACT, OFFER_LETTER, etc.
+  uploadedById   String
+  createdAt      DateTime  @default(now())
+  
+  // Relations
+  placement      Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  uploadedBy     User      @relation("PlacementDocumentUploader", fields: [uploadedById], references: [id])
+  
+  @@map("placement_documents")
+}
+
+
+
+
+// Add these new enums to your existing enums section
+enum SalaryType {
+  ANNUAL
+  MONTHLY
+  HOURLY
+}
+
+enum FeeType {
+  PERCENTAGE
+  FIXED
+}
+
+enum PlacementType {
+  PERMANENT
+  CONTRACT
+  TEMP_TO_PERM
+}
+
+enum WorkType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  REMOTE
+  HYBRID
 }
 
 enum ExperienceLevel {

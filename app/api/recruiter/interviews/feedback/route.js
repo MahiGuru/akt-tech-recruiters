@@ -1,4 +1,4 @@
-// app/api/recruiter/interviews/feedback/route.js
+// app/api/recruiter/interviews/feedback/route.js - FIXED VERSION
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../../(client)/lib/auth'
@@ -59,9 +59,24 @@ export async function POST(request) {
       wouldRecommendHiring
     } = body
 
-    if (!interviewId || !outcome || !feedback) {
+    // FIXED: Better validation
+    if (!interviewId) {
       return NextResponse.json(
-        { message: 'Interview ID, outcome, and feedback are required' },
+        { message: 'Interview ID is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!outcome) {
+      return NextResponse.json(
+        { message: 'Interview outcome is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!feedback || feedback.trim() === '') {
+      return NextResponse.json(
+        { message: 'Feedback is required' },
         { status: 400 }
       )
     }
@@ -70,16 +85,33 @@ export async function POST(request) {
     const validOutcomes = ['EXCELLENT', 'GOOD', 'AVERAGE', 'POOR']
     if (!validOutcomes.includes(outcome)) {
       return NextResponse.json(
-        { message: 'Invalid interview outcome' },
+        { message: 'Invalid interview outcome. Must be one of: EXCELLENT, GOOD, AVERAGE, POOR' },
         { status: 400 }
       )
     }
 
-    // Validate ratings (1-5)
+    // FIXED: Better ratings validation - handle undefined and ensure they're numbers
     const ratings = [overallRating, technicalRating, communicationRating, culturalFitRating]
-    if (ratings.some(rating => rating < 1 || rating > 5)) {
+    const validRatings = ratings.filter(rating => rating !== undefined && rating !== null)
+    
+    if (validRatings.length > 0) {
+      const invalidRatings = validRatings.filter(rating => {
+        const num = Number(rating)
+        return isNaN(num) || num < 1 || num > 5
+      })
+      
+      if (invalidRatings.length > 0) {
+        return NextResponse.json(
+          { message: 'All ratings must be numbers between 1 and 5' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // FIXED: Validate hiring recommendation (can be null)
+    if (wouldRecommendHiring !== null && wouldRecommendHiring !== undefined && typeof wouldRecommendHiring !== 'boolean') {
       return NextResponse.json(
-        { message: 'Ratings must be between 1 and 5' },
+        { message: 'Would recommend hiring must be true, false, or null' },
         { status: 400 }
       )
     }
@@ -111,7 +143,15 @@ export async function POST(request) {
             id: true,
             name: true,
             email: true,
-            addedById: true
+            addedById: true,
+            status: true,
+            addedBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         },
         scheduledBy: {
@@ -150,32 +190,56 @@ export async function POST(request) {
       )
     }
 
+    // FIXED: Prepare update data with proper type conversion
+    const updateData = {
+      status,
+      outcome,
+      feedback: feedback.trim(),
+      feedbackSubmitted: true,
+      feedbackSubmittedAt: now,
+      feedbackSubmittedById: session.user.id
+    }
+
+    // Add optional fields only if they exist
+    if (overallRating !== undefined && overallRating !== null) {
+      updateData.overallRating = Number(overallRating)
+    }
+    if (technicalRating !== undefined && technicalRating !== null) {
+      updateData.technicalRating = Number(technicalRating)
+    }
+    if (communicationRating !== undefined && communicationRating !== null) {
+      updateData.communicationRating = Number(communicationRating)
+    }
+    if (culturalFitRating !== undefined && culturalFitRating !== null) {
+      updateData.culturalFitRating = Number(culturalFitRating)
+    }
+    if (strengths && strengths.trim()) {
+      updateData.strengths = strengths.trim()
+    }
+    if (weaknesses && weaknesses.trim()) {
+      updateData.weaknesses = weaknesses.trim()
+    }
+    if (nextSteps && nextSteps.trim()) {
+      updateData.nextSteps = nextSteps.trim()
+    }
+    if (recommendations && recommendations.trim()) {
+      updateData.recommendations = recommendations.trim()
+    }
+    if (wouldRecommendHiring !== null && wouldRecommendHiring !== undefined) {
+      updateData.wouldRecommendHiring = wouldRecommendHiring
+    }
+
     // Update interview with feedback
     const updatedInterview = await prisma.interview.update({
       where: { id: interviewId },
-      data: {
-        status,
-        outcome,
-        overallRating,
-        technicalRating,
-        communicationRating,
-        culturalFitRating,
-        strengths: strengths || null,
-        weaknesses: weaknesses || null,
-        feedback,
-        nextSteps: nextSteps || null,
-        recommendations: recommendations || null,
-        wouldRecommendHiring,
-        feedbackSubmitted: true,
-        feedbackSubmittedAt: now,
-        feedbackSubmittedById: session.user.id
-      },
+      data: updateData,
       include: {
         candidate: {
           select: {
             id: true,
             name: true,
             email: true,
+            status: true,
             addedBy: {
               select: {
                 id: true,
@@ -206,7 +270,7 @@ export async function POST(request) {
     const notificationPromises = []
 
     // Notify the candidate's owner (if different from feedback submitter)
-    if (interview.candidate.addedBy !== session.user.id) {
+    if (interview.candidate.addedBy.id !== session.user.id) {
       const outcomeMessage = outcome === 'EXCELLENT' || outcome === 'GOOD' 
         ? `positive feedback (${outcome.toLowerCase()})` 
         : `feedback requiring attention (${outcome.toLowerCase()})`
