@@ -1,260 +1,260 @@
-// app/(client)/dashboard/recruiter/DashboardStats.js (Enhanced Version)
-import { motion } from "framer-motion";
+// app/(client)/dashboard/recruiter/DashboardStats.js - Enhanced with Interview Stats
+'use client'
+
+import { motion } from 'framer-motion'
 import { 
-  FileText, 
-  Link as LinkIcon, 
-  Unlink, 
   Users, 
-  Shield, 
-  Target,
-  Award,
-  TrendingUp,
-  Activity,
+  FileText, 
+  Target, 
+  TrendingUp, 
   Calendar,
-  Star,
-  Zap,
+  Clock,
   CheckCircle,
-  Clock
-} from "lucide-react";
+  Activity,
+  AlertCircle,
+  User,
+  Timer,
+  Video
+} from 'lucide-react'
 
-export default function DashboardStats({ stats, candidates, isAdmin }) {
-  // Calculate additional metrics
-  const totalCandidates = candidates?.length || 0;
-  const activeCandidates = candidates?.filter(c => c.status === 'ACTIVE').length || 0;
-  const placedCandidates = candidates?.filter(c => c.status === 'PLACED').length || 0;
-  const successRate = totalCandidates > 0 ? Math.round((placedCandidates / totalCandidates) * 100) : 0;
-
-  // Calculate upcoming interviews
+export default function DashboardStats({ stats, candidates, isAdmin, onTabChange }) {
+  // Calculate upcoming interviews from candidates data
   const upcomingInterviews = candidates?.reduce((count, candidate) => {
-    if (!candidate.interviews) return count;
-    const now = new Date();
-    return count + candidate.interviews.filter(interview => {
-      const interviewDate = new Date(interview.scheduledAt);
-      return interviewDate > now && ['SCHEDULED', 'CONFIRMED'].includes(interview.status);
-    }).length;
-  }, 0) || 0;
+    if (!candidate.interviews) return count
+    
+    const upcoming = candidate.interviews.filter(interview => {
+      const interviewDate = new Date(interview.scheduledAt)
+      const now = new Date()
+      return interviewDate > now && ['SCHEDULED', 'CONFIRMED'].includes(interview.status)
+    })
+    
+    return count + upcoming.length
+  }, 0) || 0
 
-  const statCards = [
+  // Calculate interviews in next 24 hours
+  const interviewsNext24h = candidates?.reduce((count, candidate) => {
+    if (!candidate.interviews) return count
+    
+    const next24h = candidate.interviews.filter(interview => {
+      const interviewDate = new Date(interview.scheduledAt)
+      const now = new Date()
+      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      return interviewDate > now && 
+             interviewDate <= tomorrow && 
+             ['SCHEDULED', 'CONFIRMED'].includes(interview.status)
+    })
+    
+    return count + next24h.length
+  }, 0) || 0
+
+  // Calculate completed interviews
+  const completedInterviews = candidates?.reduce((count, candidate) => {
+    if (!candidate.interviews) return count
+    
+    const completed = candidate.interviews.filter(interview => 
+      interview.status === 'COMPLETED'
+    )
+    
+    return count + completed.length
+  }, 0) || 0
+
+  // Enhanced stats array with interview data
+  const enhancedStats = [
     {
-      id: 'resumes',
+      title: 'Total Candidates',
+      value: stats.total || candidates?.length || 0,
+      subtitle: `${(stats.candidatesByStatus?.ACTIVE || 0)} active`,
+      icon: Users,
+      color: 'blue',
+      trend: '+12%',
+      isPositive: true,
+      targetTab: 'candidates',
+      description: 'View all candidates'
+    },
+    {
       title: 'Resume Database',
       value: stats.totalResumes || 0,
-      subtitle: `${stats.mappedResumes || 0} mapped to candidates`,
+      subtitle: `${stats.mappedResumes || 0} mapped`,
       icon: FileText,
-      gradient: 'from-blue-500 to-blue-600',
-      bgColor: 'bg-blue-100',
-      textColor: 'text-blue-600',
-      change: '+12%',
-      changeType: 'positive'
+      color: 'green',
+      trend: '+8%',
+      isPositive: true,
+      targetTab: 'resumes',
+      description: 'Browse resume database'
     },
     {
-      id: 'candidates',
-      title: isAdmin ? 'Team Candidates' : 'Your Candidates',
-      value: totalCandidates,
-      subtitle: `${activeCandidates} active candidates`,
-      icon: Users,
-      gradient: 'from-green-500 to-green-600',
-      bgColor: 'bg-green-100',
-      textColor: 'text-green-600',
-      change: '+8%',
-      changeType: 'positive'
-    },
-    {
-      id: 'placed',
-      title: 'Successful Placements',
-      value: placedCandidates,
-      subtitle: `${successRate}% success rate`,
-      icon: Target,
-      gradient: 'from-purple-500 to-purple-600',
-      bgColor: 'bg-purple-100',
-      textColor: 'text-purple-600',
-      change: '+23%',
-      changeType: 'positive'
-    },
-    {
-      id: 'interviews',
       title: 'Upcoming Interviews',
       value: upcomingInterviews,
-      subtitle: 'This week',
+      subtitle: interviewsNext24h > 0 ? `${interviewsNext24h} in next 24h` : 'No interviews today',
       icon: Calendar,
-      gradient: 'from-orange-500 to-orange-600',
-      bgColor: 'bg-orange-100',
-      textColor: 'text-orange-600',
-      change: '+5%',
-      changeType: 'positive'
+      color: 'purple',
+      trend: upcomingInterviews > 0 ? 'Active' : 'None',
+      isPositive: upcomingInterviews > 0,
+      urgent: interviewsNext24h > 0,
+      targetTab: 'candidates',
+      description: 'Manage interviews'
+    },
+    {
+      title: 'Placement Rate',
+      value: stats.total > 0 
+        ? `${Math.round(((stats.candidatesByStatus?.PLACED || 0) / stats.total) * 100)}%`
+        : '0%',
+      subtitle: `${stats.candidatesByStatus?.PLACED || 0} placed`,
+      icon: Target,
+      color: 'orange',
+      trend: 'Stable',
+      isPositive: true,
+      targetTab: 'candidates',
+      description: 'View placed candidates'
     }
-  ];
+  ]
 
-  // Add admin-specific stats
+  // Additional admin stats
   if (isAdmin) {
-    statCards.push(
+    enhancedStats.push(
       {
-        id: 'team',
-        title: 'Team Members',
+        title: 'Team Size',
         value: stats.teamSize || 0,
         subtitle: 'Active recruiters',
-        icon: Shield,
-        gradient: 'from-red-500 to-red-600',
-        bgColor: 'bg-red-100',
-        textColor: 'text-red-600',
-        change: '+2',
-        changeType: 'positive'
+        icon: User,
+        color: 'indigo',
+        trend: 'Stable',
+        isPositive: true,
+        targetTab: 'team',
+        description: 'Manage team members'
       },
       {
-        id: 'performance',
-        title: 'Team Performance',
-        value: '94%',
-        subtitle: 'Average success rate',
-        icon: TrendingUp,
-        gradient: 'from-indigo-500 to-indigo-600',
-        bgColor: 'bg-indigo-100',
-        textColor: 'text-indigo-600',
-        change: '+7%',
-        changeType: 'positive'
+        title: 'Completed Interviews',
+        value: completedInterviews,
+        subtitle: 'This month',
+        icon: CheckCircle,
+        color: 'emerald',
+        trend: '+15%',
+        isPositive: true,
+        targetTab: 'analytics',
+        description: 'View analytics'
       }
-    );
+    )
   }
 
   return (
-    <div className="mb-8">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {isAdmin ? 'Admin Dashboard' : 'Recruiting Dashboard'}
-        </h1>
-        <p className="text-gray-600">
-          {isAdmin 
-            ? 'Monitor your team\'s performance and manage all candidates' 
-            : 'Track your recruiting progress and manage candidates'
-          }
-        </p>
-      </div>
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
+      {enhancedStats.map((stat, index) => (
+        <motion.div
+          key={stat.title}
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ 
+            duration: 0.3, 
+            delay: index * 0.1,
+            type: "spring",
+            stiffness: 100
+          }}
+          onClick={() => onTabChange && stat.targetTab && onTabChange(stat.targetTab)}
+          className={`
+            relative overflow-hidden rounded-xl p-6 
+            ${stat.urgent 
+              ? 'bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200 shadow-lg' 
+              : 'bg-white border border-gray-200 shadow-sm'
+            }
+            ${onTabChange && stat.targetTab 
+              ? 'hover:shadow-lg hover:scale-105 cursor-pointer transform transition-all duration-200' 
+              : 'hover:shadow-md transition-all duration-200'
+            }
+            group
+          `}
+        >
+          {/* Click indicator and tooltip */}
+          {onTabChange && stat.targetTab && (
+            <>
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="w-6 h-6 bg-gray-800 bg-opacity-80 rounded-full flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+              
+              {/* Tooltip */}
+              <div className="absolute bottom-2 left-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                <div className="bg-gray-800 bg-opacity-90 text-white text-xs px-2 py-1 rounded text-center">
+                  Click to {stat.description}
+                </div>
+              </div>
+            </>
+          )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-        {statCards.map((stat, index) => (
-          <motion.div
-            key={stat.id}
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ 
-              duration: 0.5, 
-              delay: index * 0.1,
-              type: "spring",
-              stiffness: 100
-            }}
-            whileHover={{ 
-              scale: 1.02, 
-              boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
-              transition: { duration: 0.2 }
-            }}
-            className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group"
-          >
-            {/* Icon and Change Indicator */}
-            <div className="flex items-start justify-between mb-4">
-              <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center group-hover:scale-110 transition-transform duration-200`}>
-                <stat.icon className={`w-6 h-6 ${stat.textColor}`} />
-              </div>
-              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                stat.changeType === 'positive' 
-                  ? 'bg-green-100 text-green-600' 
-                  : 'bg-red-100 text-red-600'
-              }`}>
-                {stat.change}
-              </div>
+          {/* Urgent indicator for upcoming interviews */}
+          {stat.urgent && (
+            <div className="absolute top-2 right-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
             </div>
+          )}
 
-            {/* Value */}
-            <div className="mb-2">
-              <div className="text-2xl font-bold text-gray-900 mb-1">
-                {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
-              </div>
-              <div className="text-sm font-medium text-gray-900 mb-1">
-                {stat.title}
-              </div>
-              <div className="text-xs text-gray-500">
-                {stat.subtitle}
-              </div>
+          <div className="flex items-center justify-between mb-3">
+            <div className={`
+              w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200
+              ${stat.color === 'blue' ? 'bg-blue-100 text-blue-600 group-hover:bg-blue-200' :
+                stat.color === 'green' ? 'bg-green-100 text-green-600 group-hover:bg-green-200' :
+                stat.color === 'purple' ? 'bg-purple-100 text-purple-600 group-hover:bg-purple-200' :
+                stat.color === 'orange' ? 'bg-orange-100 text-orange-600 group-hover:bg-orange-200' :
+                stat.color === 'indigo' ? 'bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200' :
+                stat.color === 'emerald' ? 'bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200' :
+                'bg-gray-100 text-gray-600 group-hover:bg-gray-200'
+              }
+            `}>
+              <stat.icon className="w-6 h-6" />
             </div>
-
-            {/* Progress bar for visual appeal */}
-            <div className="w-full bg-gray-200 rounded-full h-1">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${Math.min((typeof stat.value === 'number' ? stat.value : 0) / 100 * 100, 100)}%` }}
-                transition={{ duration: 1, delay: index * 0.1 + 0.5 }}
-                className={`h-1 rounded-full bg-gradient-to-r ${stat.gradient}`}
-              />
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Quick Insights */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, delay: 0.8 }}
-        className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-6 border border-gray-200"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Quick Insights</h3>
-          </div>
-          <div className="text-sm text-gray-500">Updated just now</div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-gray-900">
-                {Math.round((stats.mappedResumes / Math.max(stats.totalResumes, 1)) * 100)}%
-              </div>
-              <div className="text-sm text-gray-600">Resumes Mapped</div>
+            
+            {/* Trend indicator */}
+            <div className={`
+              flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium
+              ${stat.isPositive 
+                ? 'bg-green-100 text-green-700' 
+                : 'bg-red-100 text-red-700'
+              }
+            `}>
+              {stat.isPositive ? (
+                <TrendingUp className="w-3 h-3" />
+              ) : (
+                <Activity className="w-3 h-3" />
+              )}
+              {stat.trend}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Activity className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-gray-900">
-                {stats.candidatesWithResumes || 0}
-              </div>
-              <div className="text-sm text-gray-600">Candidates w/ Resumes</div>
-            </div>
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+            <p className={`
+              text-2xl font-bold transition-colors duration-200
+              ${stat.urgent ? 'text-orange-900' : 'text-gray-900'}
+            `}>
+              {stat.value}
+            </p>
+            <p className={`
+              text-sm transition-colors duration-200
+              ${stat.urgent ? 'text-orange-700' : 'text-gray-500'}
+            `}>
+              {stat.subtitle}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Star className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-gray-900">
-                {successRate}%
+          {/* Special indicators for interview-related stats */}
+          {stat.title === 'Upcoming Interviews' && upcomingInterviews > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <Timer className="w-3 h-3" />
+                <span>Next: Today</span>
               </div>
-              <div className="text-sm text-gray-600">Success Rate</div>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-gray-900">
-                {upcomingInterviews}
-              </div>
-              <div className="text-sm text-gray-600">This Week</div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+          {/* Hover effect overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white opacity-0 group-hover:opacity-5 transition-opacity duration-200" />
+        </motion.div>
+      ))}
+
+
     </div>
-  );
+  )
 }

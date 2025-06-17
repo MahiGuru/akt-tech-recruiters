@@ -49,7 +49,7 @@ export async function GET(request, { params }) {
     let allowedRecruiterIds = [session.user.id]
 
     if (isAdmin) {
-      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+      allowedRecruiterIds  = await getTeamMemberIds(session.user.id)
     }
 
     // Get candidate with full details - check if accessible
