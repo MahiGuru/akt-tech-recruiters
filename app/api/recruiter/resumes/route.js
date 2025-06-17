@@ -1,4 +1,4 @@
-// app/api/recruiter/resumes/route.js (Updated for Recruiter-Specific Folders)
+// app/api/recruiter/resumes/route.js (Fixed for Bulk Upload)
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
@@ -160,6 +160,7 @@ export async function GET(request) {
       // This includes:
       // 1. All user resumes (public resumes from job applications)
       // 2. Resumes from candidates added by accessible recruiters
+      // 3. FIXED: Unmapped resumes uploaded by this recruiter
       
       const userResumes = await prisma.resume.findMany({
         where: { 
@@ -228,14 +229,29 @@ export async function GET(request) {
         ]
       })
 
-      resumes = [...userResumes, ...candidateResumes]
+      // FIXED: Also get unmapped resumes (no userId and no candidateId)
+      // These are resumes uploaded through bulk upload without assignment
+      const unmappedResumes = await prisma.resume.findMany({
+        where: {
+          userId: null,
+          candidateId: null,
+          isActive: true,
+          // Add some way to track which recruiter uploaded them
+          // For now, we'll include all unmapped resumes for any recruiter
+        },
+        orderBy: [
+          { createdAt: 'desc' }
+        ]
+      })
+
+      resumes = [...userResumes, ...candidateResumes, ...unmappedResumes]
     }
 
     // Add management permissions to each resume
     const resumesWithPermissions = resumes.map(resume => ({
       ...resume,
-      canEdit: isAdmin || (resume.candidate?.addedById === session.user.id),
-      canDelete: isAdmin || (resume.candidate?.addedById === session.user.id),
+      canEdit: isAdmin || (resume.candidate?.addedById === session.user.id) || (!resume.candidateId && !resume.userId),
+      canDelete: isAdmin || (resume.candidate?.addedById === session.user.id) || (!resume.candidateId && !resume.userId),
       canMap: isAdmin || !resume.candidateId, // Can map if admin or unmapped
       canUnmap: isAdmin || (resume.candidate?.addedById === session.user.id)
     }))
@@ -290,10 +306,22 @@ export async function POST(request) {
     const description = formData.get('description')
     const experienceLevel = formData.get('experienceLevel')
     const originalName = formData.get('originalName')
+    const uploadType = formData.get('uploadType') // NEW: To identify bulk uploads
 
-    if (!file || (!userId && !candidateId) || !title || !experienceLevel) {
+    // FIXED: Allow uploads without userId or candidateId for bulk uploads
+    if (!file || !title || !experienceLevel) {
       return NextResponse.json(
-        { message: 'File, userId or candidateId, title, and experience level are required' },
+        { message: 'File, title, and experience level are required' },
+        { status: 400 }
+      )
+    }
+
+    // FIXED: For bulk uploads, we don't require userId or candidateId
+    // The resume can be uploaded unmapped and assigned later
+    const isBulkUpload = uploadType === 'bulk'
+    if (!isBulkUpload && !userId && !candidateId) {
+      return NextResponse.json(
+        { message: 'Either userId or candidateId is required for non-bulk uploads' },
         { status: 400 }
       )
     }
@@ -320,9 +348,9 @@ export async function POST(request) {
       session.user.name || 'Unknown'
     )
 
-    // Get name for filename (from user or candidate)
-    let ownerName = 'unknown'
-    let ownerId = userId || candidateId
+    // Get name for filename (from user, candidate, or default)
+    let ownerName = 'unmapped'
+    let ownerId = userId || candidateId || 'unmapped'
     
     if (userId) {
       const user = await prisma.user.findUnique({
@@ -362,7 +390,7 @@ export async function POST(request) {
     const extension = originalName.split('.').pop()
     const cleanName = ownerName.replace(/[^a-zA-Z0-9]/g, '_')
     const expLevel = experienceLevel.toLowerCase()
-    const ownerType = userId ? 'user' : 'candidate'
+    const ownerType = userId ? 'user' : candidateId ? 'candidate' : 'unmapped'
     const filename = `${ownerType}_${cleanName}_${expLevel}_${timestamp}.${extension}`
     const filepath = join(recruiterDir, filename)
 
@@ -372,9 +400,18 @@ export async function POST(request) {
     await writeFile(filepath, buffer)
 
     // Check if this is the first resume (make it primary)
-    const whereClause = userId ? { userId } : { candidateId }
+    let whereClause = {}
+    if (userId) {
+      whereClause = { userId }
+    } else if (candidateId) {
+      whereClause = { candidateId }
+    } else {
+      // For unmapped resumes, don't set as primary initially
+      whereClause = { userId: null, candidateId: null }
+    }
+    
     const existingResumes = await prisma.resume.count({ where: whereClause })
-    const isPrimary = existingResumes === 0
+    const isPrimary = existingResumes === 0 && (userId || candidateId) // Only primary if mapped
 
     // Create resume record with recruiter-specific URL path
     const resumeUrl = `/uploads/resumes/${dirName}/${filename}`
@@ -388,7 +425,9 @@ export async function POST(request) {
       description: description || null,
       experienceLevel,
       isPrimary,
-      ...(userId ? { userId } : { candidateId })
+      // FIXED: Allow null values for unmapped resumes
+      userId: userId || null,
+      candidateId: candidateId || null
     }
 
     const resume = await prisma.resume.create({
@@ -425,13 +464,22 @@ export async function POST(request) {
 
     console.log(`Resume uploaded successfully to: ${filepath}`)
     console.log(`Resume URL: ${resumeUrl}`)
+    console.log(`Upload type: ${isBulkUpload ? 'bulk' : 'standard'}`)
 
     return NextResponse.json({
       message: 'Resume uploaded successfully',
-      resume,
+      resume: {
+        ...resume,
+        // Add flags for unmapped status
+        isUnmapped: !resume.userId && !resume.candidateId,
+        canMap: true,
+        uploadType: isBulkUpload ? 'bulk' : 'standard'
+      },
       uploadInfo: {
         directory: dirName,
-        filepath: resumeUrl
+        filepath: resumeUrl,
+        isBulkUpload,
+        isUnmapped: !userId && !candidateId
       }
     })
 
@@ -456,6 +504,7 @@ async function findAndDeleteResumeFile(filename, resumeUrl) {
     
     try {
       // Check if file exists at the URL-specified path
+      const { access, constants, unlink } = await import('fs/promises');
       await access(fullFilePath, constants.F_OK);
       await unlink(fullFilePath);
       console.log(`✅ Successfully deleted file: ${fullFilePath}`);
@@ -468,6 +517,7 @@ async function findAndDeleteResumeFile(filename, resumeUrl) {
   // Fallback: try to find file in old flat structure
   const flatPath = join(BASE_UPLOAD_DIR, filename);
   try {
+    const { access, constants, unlink } = await import('fs/promises');
     await access(flatPath, constants.F_OK);
     await unlink(flatPath);
     console.log(`✅ Successfully deleted file from flat structure: ${flatPath}`);
@@ -478,7 +528,7 @@ async function findAndDeleteResumeFile(filename, resumeUrl) {
   
   // Last resort: search all subdirectories
   try {
-    const { readdir, stat } = await import('fs/promises');
+    const { readdir, stat, access, constants, unlink } = await import('fs/promises');
     const items = await readdir(BASE_UPLOAD_DIR);
     
     for (const item of items) {
@@ -540,6 +590,11 @@ export async function DELETE(request, { params }) {
         canDelete = true;
       }
       
+      // FIXED: Allow deletion of unmapped resumes by any recruiter
+      if (!resume.userId && !resume.candidateId && session.user.role === 'RECRUITER') {
+        canDelete = true;
+      }
+      
       // Recruiters can delete resumes for candidates they manage
       if (session.user.role === 'RECRUITER' && resume.candidateId) {
         const recruiterProfile = await prisma.recruiter.findUnique({
@@ -588,19 +643,23 @@ export async function DELETE(request, { params }) {
     if (resume.isPrimary) {
       const whereClause = resume.userId 
         ? { userId: resume.userId, id: { not: id } }
-        : { candidateId: resume.candidateId, id: { not: id } };
+        : resume.candidateId 
+        ? { candidateId: resume.candidateId, id: { not: id } }
+        : null;
         
-      const nextResume = await prisma.resume.findFirst({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' }
-      })
-
-      if (nextResume) {
-        await prisma.resume.update({
-          where: { id: nextResume.id },
-          data: { isPrimary: true }
+      if (whereClause) {
+        const nextResume = await prisma.resume.findFirst({
+          where: whereClause,
+          orderBy: { createdAt: 'desc' }
         })
-        console.log(`Set resume ${nextResume.id} as new primary resume`);
+
+        if (nextResume) {
+          await prisma.resume.update({
+            where: { id: nextResume.id },
+            data: { isPrimary: true }
+          })
+          console.log(`Set resume ${nextResume.id} as new primary resume`);
+        }
       }
     }
 
@@ -610,7 +669,7 @@ export async function DELETE(request, { params }) {
     })
 
     // Create notification for successful deletion
-    if (session && resume.candidateId) {
+    if (session && (resume.candidateId || (!resume.userId && !resume.candidateId))) {
       await prisma.notification.create({
         data: {
           title: 'Resume Deleted',
@@ -631,6 +690,7 @@ export async function DELETE(request, { params }) {
       resumeInfo: {
         title: resume.title,
         originalName: resume.originalName,
+        wasUnmapped: !resume.userId && !resume.candidateId,
         wasInSubdirectory: resume.url.includes('/')
       }
     })

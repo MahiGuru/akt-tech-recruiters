@@ -1,6 +1,7 @@
+// app/(client)/components/ResumeMappingManager.js (Fixed Version)
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users,
@@ -21,7 +22,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -36,6 +38,7 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
   const [pendingMapping, setPendingMapping] = useState(null)
   const [bulkMappingMode, setBulkMappingMode] = useState(false)
   const [selectedResumes, setSelectedResumes] = useState([])
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     fetchResumes()
@@ -47,32 +50,63 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
 
   const fetchResumes = async () => {
     setIsLoading(true)
+    setError(null)
     try {
+      console.log('Fetching resumes for mapping...')
       const response = await fetch('/api/recruiter/resumes')
       if (response.ok) {
         const data = await response.json()
+        console.log('Resume data received:', data)
         setResumes(data.resumes || [])
       } else {
-        toast.error('Failed to load resumes')
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to load resumes')
       }
     } catch (error) {
       console.error('Error fetching resumes:', error)
+      setError(error.message)
       toast.error('Failed to load resumes')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const categorizeResumes = () => {
-    const mapped = resumes.filter(resume => resume.candidateId)
-    const unmapped = resumes.filter(resume => !resume.candidateId && resume.userId)
+  const categorizeResumes = useCallback(() => {
+    console.log('Categorizing resumes...', resumes.length)
+    
+    // FIXED: More comprehensive filtering for unmapped resumes
+    const mapped = resumes.filter(resume => {
+      const isMapped = !!resume.candidateId
+      console.log(`Resume ${resume.id} (${resume.title}) - Mapped:`, isMapped)
+      return isMapped
+    })
+    
+    // FIXED: Include all resumes that are NOT mapped to candidates
+    // This includes user resumes and unmapped bulk uploads
+    const unmapped = resumes.filter(resume => {
+      const isUnmapped = !resume.candidateId
+      console.log(`Resume ${resume.id} (${resume.title}) - Unmapped:`, isUnmapped, {
+        hasUserId: !!resume.userId,
+        hasCandidateId: !!resume.candidateId,
+        title: resume.title,
+        originalName: resume.originalName
+      })
+      return isUnmapped
+    })
+    
+    console.log('Categorization complete:', {
+      total: resumes.length,
+      mapped: mapped.length,
+      unmapped: unmapped.length
+    })
     
     setMappedResumes(mapped)
     setUnmappedResumes(unmapped)
-  }
+  }, [resumes])
 
   const mapResumeToCandidate = async (resumeId, candidateId) => {
     try {
+      console.log(`Mapping resume ${resumeId} to candidate ${candidateId}`)
       const response = await fetch(`/api/recruiter/resumes/${resumeId}/map`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -82,7 +116,7 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
       if (response.ok) {
         const result = await response.json()
         toast.success('Resume mapped to candidate successfully')
-        await fetchResumes()
+        await fetchResumes() // Refresh the data
         onMappingUpdate?.(result)
       } else {
         const error = await response.json()
@@ -96,6 +130,7 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
 
   const unmapResume = async (resumeId) => {
     try {
+      console.log(`Unmapping resume ${resumeId}`)
       const response = await fetch(`/api/recruiter/resumes/${resumeId}/unmap`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' }
@@ -103,7 +138,7 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
 
       if (response.ok) {
         toast.success('Resume unmapped from candidate')
-        await fetchResumes()
+        await fetchResumes() // Refresh the data
       } else {
         const error = await response.json()
         throw new Error(error.message || 'Failed to unmap resume')
@@ -121,6 +156,7 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
     }
 
     try {
+      console.log(`Bulk mapping ${selectedResumes.length} resumes to candidate ${selectedCandidate}`)
       const mappingPromises = selectedResumes.map(resumeId => 
         mapResumeToCandidate(resumeId, selectedCandidate)
       )
@@ -136,24 +172,37 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
   }
 
   const suggestCandidateForResume = (resume) => {
-    if (!resume.user) return null
+    // FIXED: Handle both user resumes and unmapped resumes
+    const ownerName = resume.user?.name || resume.originalName?.split('.')[0] || ''
+    const ownerEmail = resume.user?.email || ''
+    
+    if (!ownerName && !ownerEmail) return null
     
     // Try to match by name or email
-    return candidates.find(candidate => 
-      candidate.name.toLowerCase().includes(resume.user.name.toLowerCase()) ||
-      resume.user.name.toLowerCase().includes(candidate.name.toLowerCase()) ||
-      candidate.email.toLowerCase() === resume.user.email.toLowerCase()
-    )
+    return candidates.find(candidate => {
+      if (ownerEmail && candidate.email.toLowerCase() === ownerEmail.toLowerCase()) {
+        return true
+      }
+      if (ownerName) {
+        const nameLower = ownerName.toLowerCase()
+        const candidateNameLower = candidate.name.toLowerCase()
+        return nameLower.includes(candidateNameLower) || candidateNameLower.includes(nameLower)
+      }
+      return false
+    })
   }
 
   const filteredUnmappedResumes = unmappedResumes.filter(resume => {
     if (!searchTerm) return true
     
     const searchLower = searchTerm.toLowerCase()
+    const ownerName = resume.user?.name || 'Unknown'
+    const ownerEmail = resume.user?.email || ''
+    
     return (
       resume.title?.toLowerCase().includes(searchLower) ||
-      resume.user?.name?.toLowerCase().includes(searchLower) ||
-      resume.user?.email?.toLowerCase().includes(searchLower) ||
+      ownerName.toLowerCase().includes(searchLower) ||
+      ownerEmail.toLowerCase().includes(searchLower) ||
       resume.originalName?.toLowerCase().includes(searchLower)
     )
   })
@@ -203,6 +252,24 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
     )
   }
 
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className="w-6 h-6 text-red-600" />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
+        <p className="text-gray-600 mb-4">{error}</p>
+        <button
+          onClick={fetchResumes}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Try Again
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -214,6 +281,14 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={fetchResumes}
+            className="btn btn-secondary btn-sm"
+            disabled={isLoading}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
           <button
             onClick={() => setBulkMappingMode(!bulkMappingMode)}
             className={`btn btn-sm ${bulkMappingMode ? 'btn-primary' : 'btn-secondary'}`}
@@ -310,18 +385,33 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
               <Unlink className="w-4 h-4 text-orange-600" />
               Unmapped Resumes ({filteredUnmappedResumes.length})
             </h4>
-            <p className="text-sm text-gray-600">User resumes not yet mapped to candidates</p>
+            <p className="text-sm text-gray-600">Resumes not yet mapped to candidates</p>
           </div>
           
           <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
             {filteredUnmappedResumes.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500">No unmapped resumes</p>
+                <p className="text-gray-500">
+                  {unmappedResumes.length === 0 
+                    ? "No unmapped resumes found" 
+                    : "No resumes match your search"
+                  }
+                </p>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="text-sm text-blue-600 hover:text-blue-700 mt-2"
+                  >
+                    Clear search
+                  </button>
+                )}
               </div>
             ) : (
               filteredUnmappedResumes.map((resume, index) => {
                 const suggestedCandidate = suggestCandidateForResume(resume)
+                const ownerName = resume.user?.name || 'Unknown User'
+                const ownerEmail = resume.user?.email || ''
                 
                 return (
                   <motion.div
@@ -353,21 +443,31 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
                         )}
                         
                         <div className="flex items-center gap-2 mb-2">
-                          <h5 className="font-medium text-gray-900">{resume.title}</h5>
+                          <h5 className="font-medium text-gray-900">
+                            {resume.title || resume.originalName}
+                          </h5>
                           {resume.isPrimary && (
                             <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                          )}
+                          {/* FIXED: Show if this is an unmapped bulk upload */}
+                          {!resume.userId && !resume.candidateId && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
+                              Bulk Upload
+                            </span>
                           )}
                         </div>
                         
                         <div className="text-sm text-gray-600 space-y-1">
                           <div className="flex items-center gap-1">
                             <User className="w-3 h-3" />
-                            {resume.user?.name}
+                            {ownerName}
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Mail className="w-3 h-3" />
-                            {resume.user?.email}
-                          </div>
+                          {ownerEmail && (
+                            <div className="flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {ownerEmail}
+                            </div>
+                          )}
                           <div className="flex items-center gap-3">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getExperienceColor(resume.experienceLevel)}`}>
                               {getExperienceLabel(resume.experienceLevel)}
@@ -437,7 +537,20 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
             {filteredMappedResumes.length === 0 ? (
               <div className="text-center py-8">
                 <LinkIcon className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500">No mapped resumes</p>
+                <p className="text-gray-500">
+                  {mappedResumes.length === 0 
+                    ? "No mapped resumes found" 
+                    : "No resumes match your search"
+                  }
+                </p>
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="text-sm text-blue-600 hover:text-blue-700 mt-2"
+                  >
+                    Clear search
+                  </button>
+                )}
               </div>
             ) : (
               filteredMappedResumes.map((resume, index) => (
@@ -451,7 +564,9 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h5 className="font-medium text-gray-900">{resume.title}</h5>
+                        <h5 className="font-medium text-gray-900">
+                          {resume.title || resume.originalName}
+                        </h5>
                         {resume.isPrimary && (
                           <Star className="w-4 h-4 text-yellow-500 fill-current" />
                         )}
@@ -533,8 +648,8 @@ export default function ResumeMappingManager({ candidates = [], onMappingUpdate 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h4 className="font-medium mb-2">Resume to Map:</h4>
                   <div className="text-sm text-gray-600">
-                    <p><strong>Title:</strong> {pendingMapping.title}</p>
-                    <p><strong>Original Owner:</strong> {pendingMapping.user?.name} ({pendingMapping.user?.email})</p>
+                    <p><strong>Title:</strong> {pendingMapping.title || pendingMapping.originalName}</p>
+                    <p><strong>Original Owner:</strong> {pendingMapping.user?.name || 'Unknown'} {pendingMapping.user?.email ? `(${pendingMapping.user.email})` : ''}</p>
                     <p><strong>Experience Level:</strong> {getExperienceLabel(pendingMapping.experienceLevel)}</p>
                   </div>
                 </div>

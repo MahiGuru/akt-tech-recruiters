@@ -46,14 +46,14 @@ export default function BulkResumeUpload({
   const [isDragging, setIsDragging] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState([])
-  const [candidateMapping, setCandidateMapping] = useState({})
   const fileInputRef = useRef(null)
 
   // Form state for bulk upload
   const [bulkUploadSettings, setBulkUploadSettings] = useState({
     defaultExperienceLevel: 'MID_LEVEL',
     autoMapToCandidates: false,
-    createTitlesFromFilenames: true
+    createTitlesFromFilenames: true,
+    uploadWithoutMapping: true // NEW: Allow uploads without candidate mapping
   })
 
   const acceptedTypes = {
@@ -149,11 +149,13 @@ export default function BulkResumeUpload({
           formData.append('description', fileData.description || '')
           formData.append('experienceLevel', fileData.experienceLevel)
           formData.append('originalName', file.name)
+          formData.append('uploadType', 'bulk') // NEW: Indicate this is a bulk upload
           
-          // Add candidate mapping if selected
+          // FIXED: Only add candidate mapping if selected
           if (fileData.candidateId) {
             formData.append('candidateId', fileData.candidateId)
           }
+          // FIXED: Don't require userId - let the backend handle unmapped resumes
 
           // Simulate progress
           const progressInterval = setInterval(() => {
@@ -248,7 +250,7 @@ export default function BulkResumeUpload({
           title,
           description: '',
           experienceLevel: bulkUploadSettings.defaultExperienceLevel,
-          candidateId: suggestedCandidate?.id || '',
+          candidateId: suggestedCandidate?.id || '', // FIXED: Empty string instead of null
           suggestedCandidate
         })
       } catch (error) {
@@ -295,6 +297,7 @@ export default function BulkResumeUpload({
     ))
   }
 
+  // Rest of the component remains the same...
   const getExperienceColor = (level) => {
     return experienceLevels.find(l => l.value === level)?.color || 'bg-gray-100 text-gray-800'
   }
@@ -324,7 +327,7 @@ export default function BulkResumeUpload({
         <div>
           <h3 className="text-lg font-bold">Bulk Resume Management</h3>
           <p className="text-sm text-secondary-600">
-            Upload multiple resumes and map them to candidates
+            Upload multiple resumes and optionally map them to candidates
           </p>
         </div>
         <button
@@ -364,9 +367,9 @@ export default function BulkResumeUpload({
             <User className="w-5 h-5 text-purple-600" />
             <div>
               <div className="text-2xl font-bold text-purple-600">
-                {resumes.filter(r => r.userId).length}
+                {resumes.filter(r => r.userId && !r.candidateId).length}
               </div>
-              <div className="text-sm text-gray-600">User Resumes</div>
+              <div className="text-sm text-gray-600">Unmapped Resumes</div>
             </div>
           </div>
         </div>
@@ -464,6 +467,16 @@ export default function BulkResumeUpload({
                       />
                       <span className="text-sm">Auto-map to candidates by name</span>
                     </label>
+                  </div>
+                </div>
+                {/* NEW: Info about unmapped uploads */}
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5" />
+                    <div className="text-sm text-blue-700">
+                      <strong>Note:</strong> Resumes can be uploaded without mapping to candidates. 
+                      Unmapped resumes will be available in the Resume Mapping section for later assignment.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -587,7 +600,7 @@ export default function BulkResumeUpload({
                               </select>
                             </div>
 
-                            {/* Candidate Mapping */}
+                            {/* Candidate Mapping - FIXED: Made optional */}
                             <div className="md:col-span-3">
                               <select
                                 value={fileData.candidateId}
@@ -595,7 +608,7 @@ export default function BulkResumeUpload({
                                 className="input-field text-sm"
                                 disabled={isUploading}
                               >
-                                <option value="">Select candidate (optional)</option>
+                                <option value="">No candidate (upload unmapped)</option>
                                 {candidates.map(candidate => (
                                   <option key={candidate.id} value={candidate.id}>
                                     {candidate.name} ({candidate.email})
