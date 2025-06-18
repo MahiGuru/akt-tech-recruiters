@@ -13,8 +13,8 @@ export default function RootLayout({ children }) {
   return ( 
     <>
         <div className="flex justify-center">
-          <span className="self-center pl-[30px] ml-8">
-          <Link href="/" ><Image src={"/logo.svg"} alt="At Bench Logo" width={'300'} height={'120'} className="self-center"/>
+          <span className="self-center pt-6">
+          <Link href="/" ><Image src={"/atlogo.svg"} alt="At Bench Logo" width={'300'} height={'120'} className="self-center"/>
           </Link>
           </span>
           

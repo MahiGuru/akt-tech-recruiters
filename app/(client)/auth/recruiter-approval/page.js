@@ -202,7 +202,7 @@ export default function RecruiterApprovalRequest() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <Image src="/logo.svg" alt="At Bench Logo" width={200} height={80} />
+            <Image src="/logo.png" alt="At Bench Logo" width={200} height={80} />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Request Recruiter Access

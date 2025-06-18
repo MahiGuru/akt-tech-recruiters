@@ -124,7 +124,7 @@ export default function MainLayout({ children }) {
               {/* Logo */}
               <Link href="/" className="flex items-center gap-2">
                 <Image 
-                  src="/logo.svg" 
+                  src="/atlogo.svg" 
                   alt="At Bench Logo" 
                   width={200} 
                   height={80}

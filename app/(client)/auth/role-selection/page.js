@@ -137,7 +137,7 @@ export default function RoleSelection() {
         {/* Header */}
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <Image src="/logo.svg" alt="At Bench Logo" width={300} height={120} />
+            <Image src="/logo.png" alt="At Bench Logo" width={300} height={120} />
           </div>
           
           <motion.div

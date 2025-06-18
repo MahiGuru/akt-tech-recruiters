@@ -20,9 +20,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.ico" />
+        <link rel="icon" href="/icon.ico" />
         {/* Preload critical resources */}
-        <link rel="preload" href="/logo.svg" as="image" />
+        <link rel="preload" href="/atlogo.svg" as="image" />
       </head>
       <body className={inter.className}>
         <AppSessionProvider>
