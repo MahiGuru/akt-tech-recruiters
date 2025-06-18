@@ -41,22 +41,21 @@ export async function GET(request, { params }) {
         { status: 403 }
       )
     }
-
-    const { id } = params
+    const promisedParams = await params;
+    const { id } = promisedParams
 
     // Determine access scope
     const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
     let allowedRecruiterIds = [session.user.id]
 
-    if (isAdmin) {
+    // if (isAdmin) {
       allowedRecruiterIds  = await getTeamMemberIds(session.user.id)
-    }
+    // }
 
     // Get candidate with full details - check if accessible
     const candidate = await prisma.candidate.findFirst({
       where: {
-        id,
-        addedById: { in: allowedRecruiterIds }
+        id
       },
       include: {
         resumes: {

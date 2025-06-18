@@ -10,7 +10,7 @@ async function getTeamMemberIds(adminUserId) {
     where: {
       OR: [
         { adminId: adminUserId }, // Team members
-        { userId: adminUserId, recruiterType: 'ADMIN' } // Current admin
+        { userId: adminUserId, recruiterType: 'ADMIN' }, // Current admin
       ],
       isActive: true
     },
@@ -18,6 +18,33 @@ async function getTeamMemberIds(adminUserId) {
   })
   return teamMembers.map(member => member.userId)
 }
+
+async function getAllTeamUserIds(adminId) {
+  const visited = new Set()
+  const toVisit = [adminId]
+
+  while (toVisit.length > 0) {
+    const currentAdminId = toVisit.pop()
+
+    if (!visited.has(currentAdminId)) {
+      visited.add(currentAdminId)
+
+      const team = await prisma.recruiter.findMany({
+        where: { adminId: currentAdminId, isActive: true },
+        select: { userId: true }
+      })
+
+      team.forEach(member => {
+        if (!visited.has(member.userId)) {
+          toVisit.push(member.userId)
+        }
+      })
+    }
+  }
+
+  return Array.from(visited)
+}
+
 
 export async function GET(request) {
   try {
@@ -64,7 +91,7 @@ export async function GET(request) {
 
     if (recruiterProfile.recruiterType === 'ADMIN') {
       // Admin can see all team candidates
-      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+      allowedRecruiterIds = await getAllTeamUserIds(session.user.id)
     }
 
     // Build where clause for filtering
@@ -270,7 +297,7 @@ export async function POST(request) {
     
     // If admin is adding for another recruiter
     if (addedById && recruiterProfile.recruiterType === 'ADMIN') {
-      const teamMemberIds = await getTeamMemberIds(session.user.id)
+      const teamMemberIds = await getAllTeamUserIds(session.user.id)
       if (teamMemberIds.includes(addedById)) {
         actualAddedById = addedById
       }
@@ -405,7 +432,7 @@ export async function PUT(request) {
 
     if (recruiterProfile.recruiterType === 'ADMIN') {
       // Admin can edit any team member's candidates
-      const teamMemberIds = await getTeamMemberIds(session.user.id)
+      const teamMemberIds = await getAllTeamUserIds(session.user.id)
       whereClause.addedById = { in: teamMemberIds }
     } else {
       // Regular recruiters can only edit their own candidates
