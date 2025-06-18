@@ -12,7 +12,7 @@ import DashboardTabs from "./DashboardTabs";
 import QuickStatusModal from "./QuickStatusModal";
 import NotificationsPanel from "./NotificationsPanel";
 
-import CandidateManagement from "../../components/CandidateManagement";
+import CandidateManagement from "../../components/candidate-management";
 import BulkResumeUpload from "../../components/BulkResumeUpload";
 import ResumeMappingManager from "../../components/ResumeMappingManager";
 import ResumeAnalyticsDashboard from "../../components/ResumeAnalyticsDashboard";

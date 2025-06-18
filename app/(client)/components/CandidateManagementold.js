@@ -630,7 +630,7 @@ const CandidateForm = ({ candidate, onSubmit, onCancel, teamMembers, isAdmin, is
 }
 
 // Main Component
-const CandidateManagement = () => {
+const CandidateManagementOLD = () => {
   const { data: session } = useSession()
   const isAdmin = session?.user?.recruiterProfile?.recruiterType === 'ADMIN'
 
