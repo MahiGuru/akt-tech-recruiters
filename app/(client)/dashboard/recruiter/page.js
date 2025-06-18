@@ -305,7 +305,7 @@ export default function RecruiterDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.name}!</h1>
-            <p className="text-blue-100 text-lg">Here's your recruiting overview for today</p>
+            <p className="text-blue-100 text-lg">Here&apos;s your recruiting overview for today</p>
           </div>
           <div className="bg-white bg-opacity-20 rounded-xl p-4">
             <Activity className="w-12 h-12 text-white" />

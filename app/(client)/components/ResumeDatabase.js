@@ -1,4 +1,3 @@
-// app/(client)/components/ResumeDatabase.js (Complete Implementation)
 'use client'
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'

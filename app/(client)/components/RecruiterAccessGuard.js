@@ -1,4 +1,3 @@
-// app/(client)/components/RecruiterAccessGuard.js
 'use client'
 
 import { useEffect, useState } from 'react'

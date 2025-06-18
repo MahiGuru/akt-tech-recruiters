@@ -26,7 +26,8 @@ import {
   MoreVertical,
   TrendingUp,
   Activity,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 

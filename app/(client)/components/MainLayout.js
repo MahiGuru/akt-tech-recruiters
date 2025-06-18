@@ -193,7 +193,7 @@ export default function MainLayout({ children }) {
                     >
                       <div className="flex items-center gap-2">
                         {user.image ? (
-                          <img 
+                          <Image 
                             src={user.image} 
                             alt={user.name} 
                             className="w-8 h-8 rounded-full"
@@ -233,7 +233,7 @@ export default function MainLayout({ children }) {
                           <div className="px-4 py-3 border-b border-gray-100">
                             <div className="flex items-center gap-3">
                               {user.image ? (
-                                <img 
+                                <Image 
                                   src={user.image} 
                                   alt={user.name} 
                                   className="w-12 h-12 rounded-full"

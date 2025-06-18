@@ -1,4 +1,3 @@
-// app/(client)/auth/register/page.js (Updated version)
 'use client'
 
 import { Suspense, useState } from 'react'
@@ -14,7 +13,17 @@ import FormNavigation from './FormNavigation'
 import FooterLinks from './FooterLinks'
 import RegistrationSuccess from './RegistrationSuccess'
 
-export default function RegisterPage() {
+export default function Register() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <RegisterPage></RegisterPage>
+    </Suspense>
+  )
+}
+
+
+
+function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [role, setRole] = useState(searchParams.get('role') || 'EMPLOYEE')

@@ -175,7 +175,7 @@ export default function RecruiterApprovalRequest() {
               </div>
               <ul className="text-blue-700 text-sm mt-2 space-y-1">
                 <li>• An admin will review your request</li>
-                <li>• You'll receive an email notification</li>
+                <li>• You&apos;ll receive an email notification</li>
                 <li>• Once approved, you can access the dashboard</li>
               </ul>
             </div>
