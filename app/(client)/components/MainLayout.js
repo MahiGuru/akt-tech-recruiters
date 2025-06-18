@@ -379,13 +379,13 @@ const Footer = () => (
       <div className="grid md:grid-cols-4 gap-8">
         <div>
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
-              <Briefcase className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold">At Bench</span>
+            <span className='bg-white rounded-md'>
+            <Link href="/" ><Image src={"/atlogo.svg"} alt="At Bench Logo" width={'300'} height={'120'} className="self-center"/>
+          </Link>
+          </span>
           </div>
-          <p className="text-gray-400">
-            Connecting talent with opportunity in the modern world.
+          <p className="text-gray-400 text-center">
+            Find.Apply.Post.Success
           </p>
         </div>
         
