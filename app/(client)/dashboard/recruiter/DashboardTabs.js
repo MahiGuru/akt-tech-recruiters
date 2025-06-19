@@ -48,6 +48,25 @@ import {
         description: isAdmin ? "Team overview and performance" : "Your recruiting insights",
         badge: null
       },
+      ...(isAdmin ? [
+        {
+          id: "team",
+          label: "My Team",
+          shortLabel: "Team",
+          icon: Users,
+          description: "Manage team members",
+          badge: null
+        },
+        // {
+        //   id: "analytics",
+        //   label: "Analytics",
+        //   shortLabel: "Analytics",
+        //   icon: TrendingUp,
+        //   description: "Performance insights",
+        //   badge: "NEW"
+        // }
+      ] : []),
+
       {
         id: "candidates",
         label: "Candidates",
@@ -80,24 +99,7 @@ import {
         description: "Browse all resumes",
         badge: null
       },
-      ...(isAdmin ? [
-        {
-          id: "team",
-          label: "Team",
-          shortLabel: "Team",
-          icon: Users,
-          description: "Manage team members",
-          badge: null
-        },
-        {
-          id: "analytics",
-          label: "Analytics",
-          shortLabel: "Analytics",
-          icon: TrendingUp,
-          description: "Performance insights",
-          badge: "NEW"
-        }
-      ] : [])
+      
     ]
   
     const activeTabData = tabs.find(tab => tab.id === activeTab)

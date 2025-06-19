@@ -109,7 +109,7 @@ export default function DashboardStats({ stats, candidates, isAdmin, onTabChange
 
   // Additional admin stats
   if (isAdmin) {
-    enhancedStats.push(
+    enhancedStats.unshift(
       {
         title: 'Team Size',
         value: stats.teamSize || 0,

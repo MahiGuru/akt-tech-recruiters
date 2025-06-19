@@ -97,22 +97,20 @@ export default function IntegratedTeamDashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-5 text-white">
-        <div className="flex items-center justify-between">
+      {/* <div className="rounded-xl p-1 text-white border-1 border-indigo-500/50 border-dotted">
+        <div className="flex items-center justify-center">
           <div>
-            <p className="text-blue-100 text-lg">
-              {currentUser?.isMainAdmin ? '👑 Main Admin View' : '🛡️ Admin View'} - Comprehensive team oversight
-            </p>
+          <h3 className='text-black text-lg text-center'>{currentUser?.isMainAdmin ? '👑 Main Admin View' : '🛡️ Admin View'}</h3> 
           </div>
           <div className="bg-white bg-opacity-20 rounded-xl p-4">
             <Activity className="w-12 h-12 text-white" />
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 p-2">
-        <div className="flex space-x-1 overflow-x-auto">
+      <div className="bg-white rounded-xl p-2">
+        <div className="flex space-x-1 overflow-x-auto justify-center">
           {navigationTabs.map((tab) => {
             const Icon = tab.icon
             const isActive = activeView === tab.id
