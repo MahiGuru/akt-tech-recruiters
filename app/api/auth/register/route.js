@@ -13,17 +13,14 @@ export async function POST(request) {
       role, 
       phone, 
       location,
-      // Recruiter specific fields
+      // Recruiter specific fields (simplified - all recruiter registrations are admin)
       recruiterType,
-      selectedAdmin, // New field
+      selectedAdmin, // This should always be null for new registrations
       department,
       // Employer specific fields
       companyName,
       companySize,
-      industry,
-      urgency,
-      budgetRange,
-      companyLocation
+      industry
     } = body;
 
     console.log('Registration request:', { name, email, role, recruiterType });
@@ -68,56 +65,26 @@ export async function POST(request) {
 
       // Create recruiter profile if role is RECRUITER
       if (role === 'RECRUITER') {
-        const finalRecruiterType = recruiterType || 'TA'
-        const isAdminRole = finalRecruiterType === 'ADMIN'
-        const hasSelectedAdmin = selectedAdmin && selectedAdmin.trim() !== ''
-        
-        // Determine if approval is needed:
-        // - Admin recruiters don't need approval
-        // - If no admin selected and not explicitly admin, make them admin (no approval needed)
-        // - Only need approval if they selected a specific admin
-        const needsApproval = !isAdminRole && hasSelectedAdmin
-        
+        // All recruiters who register are automatically admins
         const recruiterProfile = await tx.recruiter.create({
           data: {
             userId: user.id,
-            recruiterType: finalRecruiterType,
+            recruiterType: 'ADMIN', // Always admin for new registrations
             department: department || null,
-            isActive: !needsApproval, // Active immediately if no approval needed
-            adminId: hasSelectedAdmin ? selectedAdmin : null
+            isActive: true, // Admin recruiters are immediately active
+            adminId: null // No admin needed since they are the admin
           },
         });
 
-        // Only notify admins if approval is needed
-        if (needsApproval && hasSelectedAdmin) {
-          // Notify the specific selected admin
-          await tx.notification.create({
-            data: {
-              title: 'New Recruiter Approval Request',
-              message: `${name} has registered as a ${finalRecruiterType} and selected you as their admin. Please review their request.`,
-              type: 'APPROVAL_REQUEST',
-              receiverId: selectedAdmin
-            }
-          });
-        } else if (!isAdminRole && !hasSelectedAdmin) {
-          // This shouldn't happen with the new logic, but handle it gracefully
-          // Make them admin since no admin was selected
-          await tx.recruiter.update({
-            where: { id: recruiterProfile.id },
-            data: { 
-              recruiterType: 'ADMIN',
-              isActive: true 
-            }
-          });
-        }
+        console.log('Recruiter profile created:', recruiterProfile);
 
         return {
           ...user,
           recruiterProfile: {
-            recruiterType: needsApproval ? finalRecruiterType : (finalRecruiterType === 'ADMIN' ? 'ADMIN' : finalRecruiterType),
+            recruiterType: 'ADMIN',
             department: recruiterProfile.department,
-            isActive: recruiterProfile.isActive,
-            needsApproval
+            isActive: true,
+            needsApproval: false // No approval needed for admin recruiters
           }
         };
       }
@@ -131,8 +98,8 @@ export async function POST(request) {
       { 
         message: 'User created successfully', 
         user: result,
-        // Add a flag to indicate if recruiter needs approval
-        needsApproval: role === 'RECRUITER' && result.recruiterProfile?.needsApproval
+        // Recruiters who register never need approval since they become admins
+        needsApproval: false
       },
       { status: 201 },
     );
