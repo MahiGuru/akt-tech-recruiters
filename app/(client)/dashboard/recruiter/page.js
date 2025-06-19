@@ -1,4 +1,4 @@
-// app/(client)/dashboard/recruiter/page.js (Optimized to prevent reloads)
+// Updated app/(client)/dashboard/recruiter/page.js - Integration with new hierarchical team component
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
@@ -16,7 +16,7 @@ import CandidateManagement from "../../components/candidate-management";
 import BulkResumeUpload from "../../components/BulkResumeUpload";
 import ResumeMappingManager from "../../components/ResumeMappingManager";
 import ResumeAnalyticsDashboard from "../../components/ResumeAnalyticsDashboard";
-import TeamManagement from '../../components/TeamManagement';
+import HierarchicalTeamManagement from '../../components/HierarchicalTeamManagement'; // Updated import
 import AdminDashboard from '../../components/AdminDashboard';
 
 // Icons
@@ -35,6 +35,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import ResumeDatabase from "../../components/ResumeDatabase";
+import IntegratedTeamDashboard from "../../components/IntegratedTeamDashboard";
 
 export default function RecruiterDashboard() {
   const { data: session, status } = useSession();
@@ -120,12 +121,12 @@ export default function RecruiterDashboard() {
     try {
       setIsLoading(true);
 
-      // Fetch all required data in parallel
+      // Fetch all required data in parallel - Updated to use hierarchy API for admins
       const [candidatesData, analyticsData, notificationsData, teamData] = await Promise.all([
         fetchWithCache("/api/recruiter/candidates", "candidates", true),
         fetchWithCache("/api/recruiter/resumes/analytics", "analytics", true),
         fetchWithCache("/api/recruiter/notifications", "notifications", true),
-        isAdmin ? fetchWithCache("/api/recruiter/team", "team", true) : Promise.resolve(null)
+        isAdmin ? fetchWithCache("/api/recruiter/team/hierarchy", "team-hierarchy", true) : Promise.resolve(null)
       ]);
 
       // Update state
@@ -162,11 +163,25 @@ export default function RecruiterDashboard() {
       }
 
       if (teamData && isAdmin) {
-        setTeamMembers(teamData.teamMembers || teamData);
+        // Updated to handle hierarchical data structure
+        const flattenTeamMembers = (hierarchy) => {
+          let members = [];
+          hierarchy.forEach(node => {
+            members.push(node);
+            if (node.subordinates && node.subordinates.length > 0) {
+              members = members.concat(flattenTeamMembers(node.subordinates));
+            }
+          });
+          return members;
+        };
+
+        const flatMembers = flattenTeamMembers(teamData.hierarchy || []);
+        setTeamMembers(flatMembers);
+        
         if (teamData.stats) {
           setStats(prev => ({
             ...prev,
-            teamSize: teamData.stats.total || (teamData.teamMembers?.length ?? 0),
+            teamSize: teamData.stats.total || flatMembers.length,
           }));
         }
       }
@@ -515,6 +530,14 @@ export default function RecruiterDashboard() {
             </div>
           )}
 
+
+          {/* Updated Admin tabs to use new hierarchical component */}
+          {isAdmin && activeTab === "team" && (
+            <div className="p-6">
+              <IntegratedTeamDashboard />
+            </div>
+          )}
+
           {/* Other tabs remain the same... */}
           {activeTab === "bulk-upload" && (
             <div className="p-6">
@@ -541,13 +564,6 @@ export default function RecruiterDashboard() {
                 isAdmin={isAdmin}
                 currentUserId={userId}
               />
-            </div>
-          )}
-
-          {/* Admin tabs */}
-          {isAdmin && activeTab === "team" && (
-            <div className="p-6">
-              <TeamManagement />
             </div>
           )}
 

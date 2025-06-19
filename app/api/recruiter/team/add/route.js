@@ -1,4 +1,3 @@
-// app/api/recruiter/team/add/route.js
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../../(client)/lib/auth'
@@ -59,8 +58,36 @@ export async function POST(request) {
       )
     }
 
+    // Check if current admin can create admin roles
+    const isMainAdmin = adminProfile.recruiterType === 'ADMIN' && !adminProfile.adminId
+    
+    if (recruiterType === 'ADMIN' && !isMainAdmin) {
+      return NextResponse.json(
+        { message: 'Only main admin can create other admin roles' },
+        { status: 403 }
+      )
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Determine adminId for the new member
+    let newMemberAdminId
+    if (recruiterType === 'ADMIN') {
+      // New admins are always under the main admin
+      if (isMainAdmin) {
+        newMemberAdminId = session.user.id // Under current main admin
+      } else {
+        // This shouldn't happen due to the check above, but just in case
+        return NextResponse.json(
+          { message: 'Cannot create admin role' },
+          { status: 403 }
+        )
+      }
+    } else {
+      // Non-admins are under the current admin
+      newMemberAdminId = session.user.id
+    }
 
     // Create user and recruiter profile in a transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -88,7 +115,7 @@ export async function POST(request) {
           recruiterType,
           department: department || null,
           isActive: true,
-          adminId: session.user.id // Set current admin as the admin
+          adminId: newMemberAdminId
         },
         include: {
           user: {
@@ -134,7 +161,11 @@ export async function POST(request) {
     return NextResponse.json({
       message: 'Team member added successfully',
       teamMember: result.recruiterProfile,
-      generatedPassword: password // Return for admin to share
+      hierarchy: {
+        isUnderMainAdmin: isMainAdmin,
+        adminId: newMemberAdminId,
+        level: recruiterType === 'ADMIN' ? 1 : isMainAdmin ? 1 : 2
+      }
     }, { status: 201 })
 
   } catch (error) {

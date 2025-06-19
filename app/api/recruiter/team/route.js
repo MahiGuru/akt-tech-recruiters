@@ -1,3 +1,4 @@
+// Updated app/api/recruiter/team/route.js - Fixed for sub-admin visibility
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
@@ -14,7 +15,6 @@ export async function GET(request) {
       )
     }
 
-    // Check if user is a recruiter
     if (session.user.role !== 'RECRUITER') {
       return NextResponse.json(
         { message: 'Access denied. Recruiter role required.' },
@@ -35,7 +35,6 @@ export async function GET(request) {
       )
     }
 
-    // Only admin recruiters can view team
     if (recruiterProfile.recruiterType !== 'ADMIN') {
       return NextResponse.json(
         { message: 'Admin access required to view team members' },
@@ -49,29 +48,46 @@ export async function GET(request) {
     const recruiterType = searchParams.get('recruiterType')
     const department = searchParams.get('department')
 
-    // Build where clause
-    let whereClause = {
-      OR: [
-        { adminId: session.user.id }, // Team members
-        { userId: session.user.id, recruiterType: 'ADMIN' } // Current admin
-      ]
+    // Determine if current user is main admin
+    const isMainAdmin = !recruiterProfile.adminId
+
+    // Function to get all team members recursively
+    const getAllTeamMembers = async (adminId) => {
+      const directReports = await prisma.recruiter.findMany({
+        where: { adminId: adminId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              image: true,
+              createdAt: true
+            }
+          }
+        }
+      })
+
+      let allMembers = [...directReports]
+
+      // Get subordinates of admin members
+      for (const member of directReports) {
+        if (member.recruiterType === 'ADMIN') {
+          const subordinates = await getAllTeamMembers(member.userId)
+          allMembers = allMembers.concat(subordinates)
+        }
+      }
+
+      return allMembers
     }
 
-    if (isActive !== null) {
-      whereClause.isActive = isActive === 'true'
-    }
+    // Get all team members under current admin
+    const teamMembers = await getAllTeamMembers(session.user.id)
 
-    if (recruiterType) {
-      whereClause.recruiterType = recruiterType
-    }
-
-    if (department) {
-      whereClause.department = { contains: department, mode: 'insensitive' }
-    }
-
-    // Fetch team members
-    const teamMembers = await prisma.recruiter.findMany({
-      where: whereClause,
+    // Add current admin to the list
+    const currentAdmin = await prisma.recruiter.findUnique({
+      where: { userId: session.user.id },
       include: {
         user: {
           select: {
@@ -82,54 +98,52 @@ export async function GET(request) {
             image: true,
             createdAt: true
           }
-        },
-        adminRecruiter: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
         }
-      },
-      orderBy: [
-        { recruiterType: 'asc' },
-        { user: { name: 'asc' } }
-      ]
-    })
-
-    // Get team statistics
-    const stats = await prisma.recruiter.aggregate({
-      where: whereClause,
-      _count: {
-        id: true
       }
     })
 
-    const activeCount = await prisma.recruiter.count({
-      where: {
-        ...whereClause,
-        isActive: true
-      }
-    })
+    const allMembers = currentAdmin ? [currentAdmin, ...teamMembers] : teamMembers
 
-    const typeDistribution = await prisma.recruiter.groupBy({
-      by: ['recruiterType'],
-      where: whereClause,
-      _count: {
-        recruiterType: true
-      }
-    })
+    // Apply filters if provided
+    let filteredMembers = allMembers
+    
+    if (isActive !== null) {
+      filteredMembers = filteredMembers.filter(m => m.isActive === (isActive === 'true'))
+    }
+
+    if (recruiterType) {
+      filteredMembers = filteredMembers.filter(m => m.recruiterType === recruiterType)
+    }
+
+    if (department) {
+      filteredMembers = filteredMembers.filter(m => 
+        m.department && m.department.toLowerCase().includes(department.toLowerCase())
+      )
+    }
+
+    // Calculate stats
+    const stats = {
+      total: allMembers.length,
+      active: allMembers.filter(m => m.isActive).length,
+      inactive: allMembers.filter(m => !m.isActive).length,
+      typeDistribution: allMembers.reduce((acc, member) => {
+        const existing = acc.find(item => item.type === member.recruiterType)
+        if (existing) {
+          existing.count++
+        } else {
+          acc.push({ type: member.recruiterType, count: 1 })
+        }
+        return acc
+      }, [])
+    }
 
     return NextResponse.json({
-      teamMembers,
-      stats: {
-        total: stats._count.id,
-        active: activeCount,
-        inactive: stats._count.id - activeCount,
-        typeDistribution: typeDistribution.map(item => ({
-          type: item.recruiterType,
-          count: item._count.recruiterType
-        }))
+      teamMembers: filteredMembers,
+      stats,
+      hierarchy: {
+        isMainAdmin,
+        canCreateAdmins: isMainAdmin,
+        level: isMainAdmin ? 0 : 1
       }
     })
 
@@ -269,6 +283,38 @@ export async function PUT(request) {
       return NextResponse.json(
         { message: 'Recruiter ID is required' },
         { status: 400 }
+      )
+    }
+
+    // Get the target recruiter to check permissions
+    const targetRecruiter = await prisma.recruiter.findUnique({
+      where: { id: recruiterId },
+      include: { user: true }
+    })
+
+    if (!targetRecruiter) {
+      return NextResponse.json(
+        { message: 'Recruiter not found' },
+        { status: 404 }
+      )
+    }
+
+    // Check if current admin can manage this recruiter
+    const isMainAdmin = !adminProfile.adminId
+    const canManage = isMainAdmin || targetRecruiter.adminId === session.user.id
+
+    if (!canManage) {
+      return NextResponse.json(
+        { message: 'You can only manage recruiters in your hierarchy' },
+        { status: 403 }
+      )
+    }
+
+    // Prevent sub-admins from creating other admins
+    if (recruiterType === 'ADMIN' && !isMainAdmin) {
+      return NextResponse.json(
+        { message: 'Only main admin can assign admin roles' },
+        { status: 403 }
       )
     }
 
