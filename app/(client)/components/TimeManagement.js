@@ -17,7 +17,7 @@ import {
   CheckCircle,
   AlertCircle,
   Eye,
-  Crown
+  Crown // Add Crown import
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -539,7 +539,7 @@ const TimeManagement = ({ user, isAdmin = false }) => {
                         
                         {entry.reviewComments && (
                           <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
-                            <strong>Manager's Comments:</strong> {entry.reviewComments}
+                            <strong>Managers Comments:</strong> {entry.reviewComments}
                           </div>
                         )}
                       </div>
@@ -577,7 +577,33 @@ const TimeManagement = ({ user, isAdmin = false }) => {
         <div className="space-y-4">
           <div className="bg-white rounded-lg border">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900">Pending Approvals</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">Pending Approvals</h3>
+                
+                {/* Summary Stats */}
+                {pendingApprovals.length > 0 && (
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="text-center">
+                      <div className="font-semibold text-blue-600">
+                        {pendingApprovals.filter(e => !e.isEscalated).length}
+                      </div>
+                      <div className="text-gray-600">Direct Reports</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold text-orange-600">
+                        {pendingApprovals.filter(e => e.isEscalated).length}
+                      </div>
+                      <div className="text-gray-600">Escalated</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-semibold text-gray-900">
+                        {pendingApprovals.length}
+                      </div>
+                      <div className="text-gray-600">Total</div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="divide-y divide-gray-200">
@@ -585,7 +611,13 @@ const TimeManagement = ({ user, isAdmin = false }) => {
                 <div className="p-8 text-center">
                   <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h4 className="text-lg font-medium text-gray-900 mb-2">All caught up!</h4>
-                  <p className="text-gray-600">No pending time entries to review</p>
+                  <p className="text-gray-600 mb-2">No pending time entries to review</p>
+                  <div className="text-sm text-gray-500 bg-gray-50 rounded-lg p-3 mt-4">
+                    <p><strong>How it works:</strong></p>
+                    <p>• Youll see time entries from your direct reports</p>
+                    <p>• If a team members immediate manager is unavailable, entries will escalate to you</p>
+                    <p>• Escalated entries are clearly marked with an orange badge</p>
+                  </div>
                 </div>
               ) : (
                 pendingApprovals.map((entry) => (
@@ -603,7 +635,21 @@ const TimeManagement = ({ user, isAdmin = false }) => {
                           <span className="text-xl font-bold text-blue-600">
                             {parseFloat(entry.hours).toFixed(1)}h
                           </span>
+                          
+                          {/* Escalation Badge */}
+                          {entry.isEscalated && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-800 border border-orange-200 rounded-full text-xs font-medium">
+                              <AlertCircle className="w-3 h-3" />
+                              ESCALATED
+                            </span>
+                          )}
                         </div>
+                        
+                        {entry.isEscalated && entry.escalationReason && (
+                          <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded text-sm text-orange-800">
+                            <strong>Escalation Reason:</strong> {entry.escalationReason}
+                          </div>
+                        )}
                         
                         {entry.project && (
                           <div className="text-sm text-gray-600 mb-1">
@@ -616,6 +662,18 @@ const TimeManagement = ({ user, isAdmin = false }) => {
                             {entry.description}
                           </div>
                         )}
+                        
+                        {/* User Department/Role Info */}
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          {entry.user?.recruiterProfile?.department && (
+                            <span className="bg-gray-100 px-2 py-1 rounded">
+                              {entry.user.recruiterProfile.department}
+                            </span>
+                          )}
+                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                            {entry.user?.recruiterProfile?.recruiterType || 'UNKNOWN'}
+                          </span>
+                        </div>
                       </div>
                       
                       <div className="flex items-center gap-2">
@@ -628,7 +686,8 @@ const TimeManagement = ({ user, isAdmin = false }) => {
                         </button>
                         <button
                           onClick={() => {
-                            const comments = prompt('Rejection reason (optional):')
+                            const reason = entry.isEscalated ? 'escalated entry' : 'entry'
+                            const comments = prompt(`Rejection reason for this ${reason} (optional):`)
                             handleApproveReject(entry.id, 'REJECTED', comments || '')
                           }}
                           className="btn btn-danger btn-sm flex items-center gap-1"

@@ -197,7 +197,7 @@ export default function RecruiterDashboard() {
           const unreadCount = notifData.pagination?.unread || notifList.filter(n => !n.isRead).length;
           setUnreadCount(unreadCount);
         }
-      }, 2 * 60 * 1000); // Every 2 minutes
+      }, 1 * 60 * 1000); // Every 1 minutes
 
       initRef.current.isInitialized = true;
     } catch (error) {

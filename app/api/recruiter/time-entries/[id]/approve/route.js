@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../../../(client)/lib/auth'
 import { prisma } from '../../../../../(client)/lib/prisma'
+import { canApproveTimeEntry } from '../../../../../(client)/lib/time-hierarchy-utils'
 
 export async function PUT(request, { params }) {
   try {
@@ -26,8 +27,8 @@ export async function PUT(request, { params }) {
         { status: 403 }
       )
     }
-    const asyncParams = await params;
-    const { id } = asyncParams
+
+    const { id } = params
     const body = await request.json()
     const { status, comments } = body
 
@@ -66,22 +67,20 @@ export async function PUT(request, { params }) {
       )
     }
 
-    console.log('Time entry user admin ID:', timeEntry.user.recruiterProfile?.adminId)
+    console.log('Time entry user ID:', timeEntry.userId)
     console.log('Current admin ID:', session.user.id)
 
-    // Check if current user is the direct manager of the time entry owner
-    const userAdminId = timeEntry.user.recruiterProfile?.adminId
-    const canApprove = userAdminId === session.user.id
+    // Check if current user can approve this entry (direct or escalated)
+    const approvalInfo = await canApproveTimeEntry(session.user.id, timeEntry.userId)
 
-    if (!canApprove) {
+    if (!approvalInfo.canApprove) {
       return NextResponse.json(
         { 
-          message: 'You can only approve entries from your direct reports',
+          message: 'You can only approve entries from your direct reports or escalated entries',
           debug: {
             timeEntryUserId: timeEntry.userId,
-            timeEntryUserAdminId: userAdminId,
             currentUserId: session.user.id,
-            canApprove
+            ...approvalInfo
           }
         },
         { status: 403 }
@@ -124,13 +123,14 @@ export async function PUT(request, { params }) {
     })
 
     // Send notification to the employee
+    const escalationNote = approvalInfo.isEscalated ? ' (Escalated approval)' : ''
     const notificationTitle = status === 'APPROVED' 
-      ? 'Time Entry Approved' 
-      : 'Time Entry Rejected'
+      ? `Time Entry Approved${escalationNote}` 
+      : `Time Entry Rejected${escalationNote}`
     
     const notificationMessage = status === 'APPROVED'
-      ? `Your time entry for ${new Date(timeEntry.date).toLocaleDateString()} (${timeEntry.hours}h) has been approved.`
-      : `Your time entry for ${new Date(timeEntry.date).toLocaleDateString()} (${timeEntry.hours}h) has been rejected.${comments ? ` Reason: ${comments}` : ''}`
+      ? `Your time entry for ${new Date(timeEntry.date).toLocaleDateString()} (${timeEntry.hours}h) has been approved${approvalInfo.isEscalated ? ' by escalated manager' : ''}.`
+      : `Your time entry for ${new Date(timeEntry.date).toLocaleDateString()} (${timeEntry.hours}h) has been rejected${approvalInfo.isEscalated ? ' by escalated manager' : ''}.${comments ? ` Reason: ${comments}` : ''}`
 
     await prisma.notification.create({
       data: {
@@ -143,8 +143,9 @@ export async function PUT(request, { params }) {
     })
 
     return NextResponse.json({
-      message: `Time entry ${status.toLowerCase()} successfully`,
-      entry: updatedEntry
+      message: `Time entry ${status.toLowerCase()} successfully${approvalInfo.isEscalated ? ' (escalated)' : ''}`,
+      entry: updatedEntry,
+      escalated: approvalInfo.isEscalated
     })
 
   } catch (error) {

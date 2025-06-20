@@ -3,6 +3,11 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
 import { prisma } from '../../../(client)/lib/prisma'
+import { 
+  findAvailableManager, 
+  createEscalationNotification,
+  markEntriesAsEscalated 
+} from '../../../(client)/lib/time-hierarchy-utils'
 
 export async function GET(request) {
   try {
@@ -190,16 +195,36 @@ export async function POST(request) {
 
       // Send single notification to manager for bulk entry
       if (recruiterProfile.adminId && validEntries.length > 0) {
-        const totalHours = validEntries.reduce((sum, entry) => sum + entry.hours, 0)
-        await prisma.notification.create({
-          data: {
-            title: 'Bulk Time Entries for Approval',
-            message: `${session.user.name} submitted ${validEntries.length} time entries totaling ${totalHours} hours`,
-            type: 'APPROVAL_REQUEST',
-            receiverId: recruiterProfile.adminId,
-            senderId: session.user.id
+        const availableManager = await findAvailableManager(session.user.id)
+        
+        if (availableManager) {
+          const totalHours = validEntries.reduce((sum, entry) => sum + entry.hours, 0)
+          
+          await createEscalationNotification(
+            session.user.id,
+            session.user.name,
+            availableManager,
+            {
+              count: validEntries.length,
+              totalHours
+            },
+            true // is bulk
+          )
+
+          // Mark escalated entries
+          if (availableManager.escalated && validEntries.length > 0) {
+            const entryIds = await prisma.timeEntry.findMany({
+              where: {
+                userId: session.user.id,
+                date: { in: validEntries.map(e => e.date) },
+                status: 'PENDING'
+              },
+              select: { id: true }
+            })
+
+            await markEntriesAsEscalated(entryIds.map(e => e.id), 'Bulk entry')
           }
-        })
+        }
       }
 
       return NextResponse.json({
@@ -263,15 +288,32 @@ export async function POST(request) {
 
     // Send notification to manager if they have one
     if (recruiterProfile.adminId) {
-      await prisma.notification.create({
-        data: {
-          title: 'New Time Entry for Approval',
-          message: `${session.user.name} submitted ${hoursFloat} hours for ${new Date(date).toLocaleDateString()}`,
-          type: 'APPROVAL_REQUEST',
-          receiverId: recruiterProfile.adminId,
-          senderId: session.user.id
+      const availableManager = await findAvailableManager(session.user.id)
+      
+      if (availableManager) {
+        await createEscalationNotification(
+          session.user.id,
+          session.user.name,
+          availableManager,
+          {
+            hours: hoursFloat,
+            date: new Date(date).toLocaleDateString()
+          },
+          false // not bulk
+        )
+
+        // Store escalation info in the time entry for tracking
+        if (availableManager.escalated) {
+          await prisma.timeEntry.update({
+            where: { id: timeEntry.id },
+            data: {
+              description: timeEntry.description 
+                ? `${timeEntry.description} [ESCALATED]`
+                : '[ESCALATED]'
+            }
+          })
         }
-      })
+      }
     }
 
     return NextResponse.json({

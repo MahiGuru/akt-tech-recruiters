@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../../(client)/lib/auth'
 import { prisma } from '../../../../(client)/lib/prisma'
+import { getManagerTimeEntryUsers } from '../../../../(client)/lib/time-hierarchy-utils'
 
 export async function GET(request) {
   try {
@@ -27,24 +28,21 @@ export async function GET(request) {
       )
     }
 
-    // Get ONLY direct reports for this admin - no recursive fetching
-    const directReports = await prisma.recruiter.findMany({
-      where: { 
-        adminId: session.user.id, 
-        isActive: true 
-      },
-      select: { userId: true }
-    })
+    // Get all users whose time entries this manager can approve
+    const { directReports: directReportIds, escalatedUsers: escalatedUserIds } = await getManagerTimeEntryUsers(session.user.id)
 
-    const directReportIds = directReports.map(r => r.userId)
+    // Combine direct reports and escalated users
+    const allApprovalUserIds = [...directReportIds, ...escalatedUserIds]
 
     console.log('Admin ID:', session.user.id)
     console.log('Direct Report IDs:', directReportIds)
+    console.log('Escalated User IDs:', escalatedUserIds)
+    console.log('All Approval User IDs:', allApprovalUserIds)
 
-    // Get pending time entries ONLY from direct reports
+    // Get pending time entries from both direct reports and escalated users
     const pendingEntries = await prisma.timeEntry.findMany({
       where: {
-        userId: { in: directReportIds },
+        userId: { in: allApprovalUserIds },
         status: 'PENDING'
       },
       include: {
@@ -68,8 +66,14 @@ export async function GET(request) {
 
     console.log('Found pending entries:', pendingEntries.length)
 
-    // These are already filtered to direct reports, so no additional filtering needed
-    const directReportEntries = pendingEntries
+    // Mark which entries are escalated
+    const directReportEntries = pendingEntries.map(entry => ({
+      ...entry,
+      isEscalated: escalatedUserIds.includes(entry.userId),
+      escalationReason: escalatedUserIds.includes(entry.userId) 
+        ? 'Immediate manager unavailable' 
+        : null
+    }))
 
     // Get summary statistics
     const totalPendingHours = directReportEntries.reduce((sum, entry) => 
