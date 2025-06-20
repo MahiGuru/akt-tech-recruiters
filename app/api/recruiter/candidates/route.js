@@ -19,6 +19,7 @@ export async function GET(request) {
       )
     }
     
+    // Check if user is a recruiter
     if (session.user.role !== 'RECRUITER') {
       return NextResponse.json(
         { message: 'Access denied. Recruiter role required.' },
@@ -43,12 +44,16 @@ export async function GET(request) {
     const search = searchParams.get('search')
     const status = searchParams.get('status')
     const addedBy = searchParams.get('addedBy')
+    const experienceLevel = searchParams.get('experienceLevel')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
-    const debug = searchParams.get('debug') === 'true'
-
+ 
     // FIXED: Use hierarchy utils for consistent access control
     const { ids: allowedRecruiterIds, isAdmin, hierarchyLevel, totalTeamSize } = await getAllowedRecruiterIds(session.user.id)
+
+    // if (recruiterProfile.recruiterType === 'ADMIN') {
+    //   allowedRecruiterIds = await getAllTeamUserIds(session.user.id)
+    // }
 
     // Build where clause for filtering
     let whereClause = {
@@ -71,7 +76,7 @@ export async function GET(request) {
       whereClause.addedById = addedBy
     }
 
-    // Fetch candidates with full details
+    // Fetch candidates with full details INCLUDING HIERARCHY
     const candidates = await prisma.candidate.findMany({
       where: whereClause,
       include: {
@@ -111,7 +116,29 @@ export async function GET(request) {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            // ADDED: Include recruiter profile with hierarchy
+            recruiterProfile: {
+              select: {
+                id: true,
+                recruiterType: true,
+                department: true,
+                adminId: true,
+                adminRecruiter: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    recruiterProfile: {
+                      select: {
+                        recruiterType: true,
+                        department: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -120,19 +147,48 @@ export async function GET(request) {
       skip: offset
     })
 
-    // Get total count for pagination
+    // ADDED: Calculate hierarchy level for each candidate
+    const candidatesWithHierarchy = await Promise.all(
+      candidates.map(async (candidate) => {
+        let hierarchyLevel = 1
+        let reportingManager = null
+        
+        if (candidate.addedBy?.recruiterProfile) {
+          const recruiterProfile = candidate.addedBy.recruiterProfile
+          
+          // If recruiter has an admin, calculate their level
+          if (recruiterProfile.adminId) {
+            hierarchyLevel = await calculateRecruiterLevel(recruiterProfile.adminId, session.user.id)
+            reportingManager = recruiterProfile.adminRecruiter
+          } else if (recruiterProfile.recruiterType === 'ADMIN') {
+            // If this is a top-level admin
+            hierarchyLevel = 1
+          }
+        }
+
+        return {
+          ...candidate,
+          hierarchyInfo: {
+            level: hierarchyLevel,
+            reportingManager,
+            recruiterType: candidate.addedBy?.recruiterProfile?.recruiterType || 'UNKNOWN',
+            department: candidate.addedBy?.recruiterProfile?.department
+          }
+        }
+      })
+    )
+
+    // Rest of the existing code...
     const totalCount = await prisma.candidate.count({
       where: whereClause
     })
 
-    // Get status distribution for dashboard stats
     const statusStats = await prisma.candidate.groupBy({
       by: ['status'],
       where: { addedById: { in: allowedRecruiterIds } },
       _count: { status: true }
     })
 
-    // Calculate interview statistics
     const upcomingInterviewsCount = await prisma.interview.count({
       where: {
         candidate: {
@@ -147,9 +203,8 @@ export async function GET(request) {
       }
     })
 
-    // Get recruiter distribution (for admin view)
     let recruiterStats = []
-    if (isAdmin) {
+    if (recruiterProfile.recruiterType === 'ADMIN') {
       const recruiterDistribution = await prisma.candidate.groupBy({
         by: ['addedById'],
         where: { addedById: { in: allowedRecruiterIds } },
@@ -160,21 +215,31 @@ export async function GET(request) {
         recruiterDistribution.map(async (stat) => {
           const user = await prisma.user.findUnique({
             where: { id: stat.addedById },
-            select: { name: true, email: true }
+            select: { 
+              name: true, 
+              email: true,
+              recruiterProfile: {
+                select: {
+                  recruiterType: true,
+                  department: true
+                }
+              }
+            }
           })
           return {
             recruiterId: stat.addedById,
             recruiterName: user?.name || 'Unknown',
             recruiterEmail: user?.email || '',
+            recruiterType: user?.recruiterProfile?.recruiterType || 'UNKNOWN',
+            department: user?.recruiterProfile?.department,
             candidateCount: stat._count.addedById
           }
         })
       )
     }
 
-    // Prepare response
-    const response = {
-      candidates,
+    return NextResponse.json({
+      candidates: candidatesWithHierarchy, // Return candidates with hierarchy
       pagination: {
         total: totalCount,
         limit,
@@ -191,21 +256,10 @@ export async function GET(request) {
         recruiterDistribution: recruiterStats
       },
       permissions: {
-        isAdmin,
-        canManageAll: isAdmin,
-        hierarchyLevel,
-        totalTeamSize,
-        accessibleRecruiterIds: allowedRecruiterIds.length
+        isAdmin: recruiterProfile.recruiterType === 'ADMIN',
+        canManageAll: recruiterProfile.recruiterType === 'ADMIN'
       }
-    }
-
-    // Add debug information if requested
-    if (debug) {
-      const debugInfo = await getHierarchyDebugInfo(session.user.id, 'GET_CANDIDATES')
-      response.debug = debugInfo
-    }
-
-    return NextResponse.json(response)
+    })
 
   } catch (error) {
     console.error('Error fetching candidates:', error)
@@ -213,7 +267,26 @@ export async function GET(request) {
       { message: 'Internal server error', details: error.message },
       { status: 500 }
     )
+  } 
+
+  // ADDED: Helper function to calculate recruiter level in hierarchy
+  async function calculateRecruiterLevel(adminId, topAdminId, currentLevel = 2) {
+    if (adminId === topAdminId) {
+      return currentLevel
+    }
+
+    const admin = await prisma.recruiter.findUnique({
+      where: { userId: adminId },
+      select: { adminId: true }
+    })
+
+    if (!admin || !admin.adminId) {
+      return currentLevel
+    }
+
+    return calculateRecruiterLevel(admin.adminId, topAdminId, currentLevel + 1)
   }
+
 }
 
 export async function POST(request) {

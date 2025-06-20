@@ -53,6 +53,7 @@ export async function GET(request, { params }) {
         { status: 403 }
       )
     }
+    
     const promisedParams = await params;
     const { id } = promisedParams
 
@@ -60,14 +61,15 @@ export async function GET(request, { params }) {
     const isAdmin = recruiterProfile.recruiterType === 'ADMIN'
     let allowedRecruiterIds = [session.user.id]
 
-    // if (isAdmin) {
-      allowedRecruiterIds  = await getTeamMemberIds(session.user.id)
-    // }
+    if (isAdmin) {
+      allowedRecruiterIds = await getTeamMemberIds(session.user.id)
+    }
 
-    // Get candidate with full details - check if accessible
+    // Get candidate with full details including hierarchy - check if accessible
     const candidate = await prisma.candidate.findFirst({
       where: {
-        id
+        id,
+        addedById: { in: allowedRecruiterIds }
       },
       include: {
         resumes: {
@@ -108,7 +110,29 @@ export async function GET(request, { params }) {
           select: {
             id: true,
             name: true,
-            email: true
+            email: true,
+            // ADDED: Include hierarchy information
+            recruiterProfile: {
+              select: {
+                id: true,
+                recruiterType: true,
+                department: true,
+                adminId: true,
+                adminRecruiter: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    recruiterProfile: {
+                      select: {
+                        recruiterType: true,
+                        department: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -121,9 +145,32 @@ export async function GET(request, { params }) {
       )
     }
 
-    // Add management permissions to the response
+    // ADDED: Calculate hierarchy information
+    let hierarchyLevel = 1
+    let reportingManager = null
+    
+    if (candidate.addedBy?.recruiterProfile) {
+      const recruiterProfile = candidate.addedBy.recruiterProfile
+      
+      // If recruiter has an admin, calculate their level
+      if (recruiterProfile.adminId) {
+        hierarchyLevel = await calculateRecruiterLevel(recruiterProfile.adminId, session.user.id)
+        reportingManager = recruiterProfile.adminRecruiter
+      } else if (recruiterProfile.recruiterType === 'ADMIN') {
+        // If this is a top-level admin
+        hierarchyLevel = 1
+      }
+    }
+
+    // Add hierarchy info and management permissions to the response
     const candidateWithPermissions = {
       ...candidate,
+      hierarchyInfo: {
+        level: hierarchyLevel,
+        reportingManager,
+        recruiterType: candidate.addedBy?.recruiterProfile?.recruiterType || 'UNKNOWN',
+        department: candidate.addedBy?.recruiterProfile?.department
+      },
       permissions: {
         canEdit: isAdmin || candidate.addedById === session.user.id,
         canDelete: isAdmin || candidate.addedById === session.user.id,
@@ -143,6 +190,24 @@ export async function GET(request, { params }) {
       { status: 500 }
     )
   }
+}
+
+// ADDED: Helper function to calculate recruiter level in hierarchy
+async function calculateRecruiterLevel(adminId, topAdminId, currentLevel = 2) {
+  if (adminId === topAdminId) {
+    return currentLevel
+  }
+
+  const admin = await prisma.recruiter.findUnique({
+    where: { userId: adminId },
+    select: { adminId: true }
+  })
+
+  if (!admin || !admin.adminId) {
+    return currentLevel
+  }
+
+  return calculateRecruiterLevel(admin.adminId, topAdminId, currentLevel + 1)
 }
 
 export async function DELETE(request, { params }) {

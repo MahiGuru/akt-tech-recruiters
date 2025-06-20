@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react'
 import toast from 'react-hot-toast'
 import { 
   X, Mail, Phone, MapPin, Briefcase, Users, FileText, Calendar, 
-  Video, Edit, Eye, Download, Trash2, Star, MessageSquare
+  Video, Edit, Eye, Download, Trash2, Star, MessageSquare, Crown, Shield, UserCheck
 } from 'lucide-react'
 import { getInterviewStatusColor } from '../utils/helpers'
 
@@ -39,7 +39,24 @@ const CandidateDetailModal = ({
     }
   }
 
+  // Helper function to get recruiter type display info
+  const getRecruiterTypeInfo = (recruiterType) => {
+    const typeConfig = {
+      'ADMIN': { icon: Crown, color: 'text-purple-600', bgColor: 'bg-purple-100', label: 'Admin' },
+      'LEAD': { icon: Shield, color: 'text-blue-600', bgColor: 'bg-blue-100', label: 'Lead Recruiter' },
+      'TA': { icon: UserCheck, color: 'text-green-600', bgColor: 'bg-green-100', label: 'Technical Analyst' },
+      'HR': { icon: Users, color: 'text-orange-600', bgColor: 'bg-orange-100', label: 'HR Specialist' },
+      'CS': { icon: Users, color: 'text-teal-600', bgColor: 'bg-teal-100', label: 'Customer Success' },
+      'JUNIOR': { icon: UserCheck, color: 'text-gray-600', bgColor: 'bg-gray-100', label: 'Junior Recruiter' }
+    }
+    
+    return typeConfig[recruiterType] || typeConfig['JUNIOR']
+  }
+
   if (!isOpen || !candidate) return null
+
+  const hierarchyInfo = candidate.hierarchyInfo
+  const recruiterTypeInfo = getRecruiterTypeInfo(hierarchyInfo?.recruiterType)
 
   return (
     <motion.div
@@ -61,6 +78,29 @@ const CandidateDetailModal = ({
             <div>
               <h3 className="text-2xl font-bold">{candidate.name}</h3>
               <p className="text-blue-100">{candidate.email}</p>
+              
+              {/* NEW: Hierarchy Information in Header */}
+              {hierarchyInfo && (
+                <div className="flex items-center gap-4 mt-2 text-sm">
+                  <div className="flex items-center gap-1">
+                    <recruiterTypeInfo.icon className="w-4 h-4" />
+                    <span>Added by {candidate.addedBy?.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                      {recruiterTypeInfo.label}
+                    </span>
+                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                      Level {hierarchyInfo.level}
+                    </span>
+                    {hierarchyInfo.department && (
+                      <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                        {hierarchyInfo.department}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -72,7 +112,7 @@ const CandidateDetailModal = ({
         </div>
         
         <div className="p-6 max-h-[70vh] overflow-y-auto">
-          {/* Basic Info */}
+          {/* Basic Info with Enhanced Hierarchy Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div>
               <h4 className="text-lg font-semibold mb-3">Contact Information</h4>
@@ -97,7 +137,7 @@ const CandidateDetailModal = ({
             </div>
 
             <div>
-              <h4 className="text-lg font-semibold mb-3">Professional Details</h4>
+              <h4 className="text-lg font-semibold mb-3">Management Details</h4>
               <div className="space-y-2">
                 {candidate.experience && (
                   <div className="flex items-center gap-2">
@@ -105,9 +145,48 @@ const CandidateDetailModal = ({
                     <span>{candidate.experience} years experience</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <span>Added by {candidate.addedBy?.name}</span>
+                
+                {/* Enhanced Recruiter Info */}
+                <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-2 rounded-lg ${recruiterTypeInfo.bgColor}`}>
+                      <recruiterTypeInfo.icon className={`w-4 h-4 ${recruiterTypeInfo.color}`} />
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {candidate.addedBy?.name}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {recruiterTypeInfo.label}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {hierarchyInfo && (
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500">Hierarchy Level:</span>
+                        <span className="ml-2 font-medium">L{hierarchyInfo.level}</span>
+                      </div>
+                      {hierarchyInfo.department && (
+                        <div>
+                          <span className="text-gray-500">Department:</span>
+                          <span className="ml-2 font-medium">{hierarchyInfo.department}</span>
+                        </div>
+                      )}
+                      {hierarchyInfo.reportingManager && hierarchyInfo.reportingManager.name !== 'No Manager' && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500">Reporting Manager:</span>
+                          <span className="ml-2 font-medium">{hierarchyInfo.reportingManager.name}</span>
+                          {hierarchyInfo.reportingManager.recruiterProfile?.recruiterType && (
+                            <span className="ml-1 text-xs text-gray-500">
+                              ({hierarchyInfo.reportingManager.recruiterProfile.recruiterType})
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

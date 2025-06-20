@@ -1,6 +1,6 @@
 'use client'
 
-import { Users, Mail, Phone, MapPin, Calendar, Eye, Edit, ChevronDown, ChevronUp, AlertCircle, IndianRupeeIcon } from 'lucide-react'
+import { Users, Mail, Phone, MapPin, Calendar, Eye, Edit, ChevronDown, ChevronUp, AlertCircle, IndianRupeeIcon, UserCheck, Crown, Shield } from 'lucide-react'
 import { getStatusColor } from '../utils/helpers'
 
 const CardHeader = ({
@@ -16,6 +16,37 @@ const CardHeader = ({
   onManagePlacement,
   isExpanded
 }) => {
+  // Helper function to get recruiter type badge
+  const getRecruiterTypeBadge = (recruiterType) => {
+    const typeConfig = {
+      'ADMIN': { icon: Crown, color: 'bg-purple-100 text-purple-800 border-purple-200', label: 'Admin' },
+      'LEAD': { icon: Shield, color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Lead' },
+      'TA': { icon: UserCheck, color: 'bg-green-100 text-green-800 border-green-200', label: 'TA' },
+      'HR': { icon: Users, color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'HR' },
+      'CS': { icon: Users, color: 'bg-teal-100 text-teal-800 border-teal-200', label: 'CS' },
+      'JUNIOR': { icon: UserCheck, color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Junior' }
+    }
+    
+    return typeConfig[recruiterType] || typeConfig['JUNIOR']
+  }
+
+  // Helper function to format hierarchy level
+  const getHierarchyDisplay = (hierarchyInfo) => {
+    if (!hierarchyInfo) return null
+
+    const { level, reportingManager, recruiterType, department } = hierarchyInfo
+    
+    return {
+      level: `L${level}`,
+      manager: reportingManager?.name || 'No Manager',
+      type: recruiterType,
+      department: department || 'Unassigned'
+    }
+  }
+
+  const hierarchyDisplay = getHierarchyDisplay(candidate.hierarchyInfo)
+  const recruiterBadge = getRecruiterTypeBadge(candidate.hierarchyInfo?.recruiterType)
+
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-4 flex-1">
@@ -44,13 +75,9 @@ const CardHeader = ({
                 Placed Details
               </button>
             )}
-            {isAdmin && (
-              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                {candidate.addedBy?.name}
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600">
+          
+          <div className="flex items-center gap-4 text-sm text-gray-600 mb-1">
             <div className="flex items-center gap-1">
               <Mail className="w-4 h-4" />
               {candidate.email}
@@ -68,6 +95,60 @@ const CardHeader = ({
               </div>
             )}
           </div>
+
+          {/* NEW: Hierarchy Information Display */}
+          {hierarchyDisplay && (
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">Added by:</span>
+                <div className="flex items-center gap-1">
+                  <recruiterBadge.icon className="w-3 h-3" />
+                  <span className="font-medium text-gray-700">
+                    {candidate.addedBy?.name}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium border ${recruiterBadge.color}`}>
+                  {recruiterBadge.label}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium border border-blue-200">
+                  {hierarchyDisplay.level}
+                </span>
+              </div>
+
+              {hierarchyDisplay.department && (
+                <div className="flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-gray-50 text-gray-700 rounded text-xs border border-gray-200">
+                    {hierarchyDisplay.department}
+                  </span>
+                </div>
+              )}
+
+              {/* {hierarchyDisplay.manager !== 'No Manager' && (
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Reports to:</span>
+                  <span className="font-medium text-gray-700">
+                    {hierarchyDisplay.manager}
+                  </span>
+                </div>
+              )} */}
+            </div>
+          )}
+
+          {/* FALLBACK: Show old format if hierarchy info is not available */}
+          {!hierarchyDisplay && isAdmin && (
+            <div className="text-xs text-gray-500">
+              <span>Added by: </span>
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                {candidate.addedBy?.name}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
