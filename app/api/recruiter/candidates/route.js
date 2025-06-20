@@ -1,50 +1,12 @@
-// app/api/recruiter/candidates/route.js (Updated for Admin Access)
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
 import { prisma } from '../../../(client)/lib/prisma'
-
-// Helper function to get team member IDs for admin
-async function getTeamMemberIds(adminUserId) {
-  const teamMembers = await prisma.recruiter.findMany({
-    where: {
-      OR: [
-        { adminId: adminUserId }, // Team members
-        { userId: adminUserId, recruiterType: 'ADMIN' }, // Current admin
-      ],
-      isActive: true
-    },
-    select: { userId: true }
-  })
-  return teamMembers.map(member => member.userId)
-}
-
-async function getAllTeamUserIds(adminId) {
-  const visited = new Set()
-  const toVisit = [adminId]
-
-  while (toVisit.length > 0) {
-    const currentAdminId = toVisit.pop()
-
-    if (!visited.has(currentAdminId)) {
-      visited.add(currentAdminId)
-
-      const team = await prisma.recruiter.findMany({
-        where: { adminId: currentAdminId, isActive: true },
-        select: { userId: true }
-      })
-
-      team.forEach(member => {
-        if (!visited.has(member.userId)) {
-          toVisit.push(member.userId)
-        }
-      })
-    }
-  }
-
-  return Array.from(visited)
-}
-
+import { 
+  getAllowedRecruiterIds, 
+  validateCandidateAccess,
+  getHierarchyDebugInfo 
+} from '../../../(client)/lib/hierarchy-utils'
 
 export async function GET(request) {
   try {
@@ -57,7 +19,6 @@ export async function GET(request) {
       )
     }
     
-    // Check if user is a recruiter
     if (session.user.role !== 'RECRUITER') {
       return NextResponse.json(
         { message: 'Access denied. Recruiter role required.' },
@@ -81,18 +42,13 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
     const status = searchParams.get('status')
-    const addedBy = searchParams.get('addedBy') // Filter by specific recruiter
-    const experienceLevel = searchParams.get('experienceLevel')
+    const addedBy = searchParams.get('addedBy')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
+    const debug = searchParams.get('debug') === 'true'
 
-    // Determine which candidates to show based on role
-    let allowedRecruiterIds = [session.user.id] // Default: own candidates
-
-    if (recruiterProfile.recruiterType === 'ADMIN') {
-      // Admin can see all team candidates
-      allowedRecruiterIds = await getAllTeamUserIds(session.user.id)
-    }
+    // FIXED: Use hierarchy utils for consistent access control
+    const { ids: allowedRecruiterIds, isAdmin, hierarchyLevel, totalTeamSize } = await getAllowedRecruiterIds(session.user.id)
 
     // Build where clause for filtering
     let whereClause = {
@@ -193,7 +149,7 @@ export async function GET(request) {
 
     // Get recruiter distribution (for admin view)
     let recruiterStats = []
-    if (recruiterProfile.recruiterType === 'ADMIN') {
+    if (isAdmin) {
       const recruiterDistribution = await prisma.candidate.groupBy({
         by: ['addedById'],
         where: { addedById: { in: allowedRecruiterIds } },
@@ -216,7 +172,8 @@ export async function GET(request) {
       )
     }
 
-    return NextResponse.json({
+    // Prepare response
+    const response = {
       candidates,
       pagination: {
         total: totalCount,
@@ -234,10 +191,21 @@ export async function GET(request) {
         recruiterDistribution: recruiterStats
       },
       permissions: {
-        isAdmin: recruiterProfile.recruiterType === 'ADMIN',
-        canManageAll: recruiterProfile.recruiterType === 'ADMIN'
+        isAdmin,
+        canManageAll: isAdmin,
+        hierarchyLevel,
+        totalTeamSize,
+        accessibleRecruiterIds: allowedRecruiterIds.length
       }
-    })
+    }
+
+    // Add debug information if requested
+    if (debug) {
+      const debugInfo = await getHierarchyDebugInfo(session.user.id, 'GET_CANDIDATES')
+      response.debug = debugInfo
+    }
+
+    return NextResponse.json(response)
 
   } catch (error) {
     console.error('Error fetching candidates:', error)
@@ -295,10 +263,10 @@ export async function POST(request) {
     // Determine who is adding the candidate
     let actualAddedById = session.user.id
     
-    // If admin is adding for another recruiter
+    // FIXED: If admin is adding for another recruiter, check hierarchy
     if (addedById && recruiterProfile.recruiterType === 'ADMIN') {
-      const teamMemberIds = await getAllTeamUserIds(session.user.id)
-      if (teamMemberIds.includes(addedById)) {
+      const { ids: allowedRecruiterIds } = await getAllowedRecruiterIds(session.user.id)
+      if (allowedRecruiterIds.includes(addedById)) {
         actualAddedById = addedById
       }
     }
@@ -427,25 +395,23 @@ export async function PUT(request) {
       )
     }
 
-    // Check if candidate exists and if user has permission to edit
-    let whereClause = { id: candidateId }
-
-    if (recruiterProfile.recruiterType === 'ADMIN') {
-      // Admin can edit any team member's candidates
-      const teamMemberIds = await getAllTeamUserIds(session.user.id)
-      whereClause.addedById = { in: teamMemberIds }
-    } else {
-      // Regular recruiters can only edit their own candidates
-      whereClause.addedById = session.user.id
+    // FIXED: Use hierarchy utils for access validation
+    const { accessible, denied } = await validateCandidateAccess([candidateId], session.user.id)
+    
+    if (denied.length > 0) {
+      return NextResponse.json(
+        { message: 'Candidate not found or access denied' },
+        { status: 404 }
+      )
     }
 
     const existingCandidate = await prisma.candidate.findFirst({
-      where: whereClause
+      where: { id: candidateId }
     })
 
     if (!existingCandidate) {
       return NextResponse.json(
-        { message: 'Candidate not found or access denied' },
+        { message: 'Candidate not found' },
         { status: 404 }
       )
     }

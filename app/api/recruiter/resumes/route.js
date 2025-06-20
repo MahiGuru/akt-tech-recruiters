@@ -18,17 +18,29 @@ const ALLOWED_TYPES = [
 
 // Helper function to get team member IDs for admin
 async function getTeamMemberIds(adminUserId) {
-  const teamMembers = await prisma.recruiter.findMany({
-    where: {
-      OR: [
-        { adminId: adminUserId }, // Team members
-        { userId: adminUserId, recruiterType: 'ADMIN' } // Current admin
-      ],
-      isActive: true
-    },
-    select: { userId: true }
-  })
-  return teamMembers.map(member => member.userId)
+  const visited = new Set()
+  const toVisit = [adminId]
+
+  while (toVisit.length > 0) {
+    const currentAdminId = toVisit.pop()
+
+    if (!visited.has(currentAdminId)) {
+      visited.add(currentAdminId)
+
+      const team = await prisma.recruiter.findMany({
+        where: { adminId: currentAdminId, isActive: true },
+        select: { userId: true }
+      })
+
+      team.forEach(member => {
+        if (!visited.has(member.userId)) {
+          toVisit.push(member.userId)
+        }
+      })
+    }
+  }
+
+  return Array.from(visited)
 }
 
 // Helper function to create recruiter-specific directory
