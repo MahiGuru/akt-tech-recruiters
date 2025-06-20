@@ -18,6 +18,7 @@ import ResumeMappingManager from "../../components/ResumeMappingManager";
 import ResumeAnalyticsDashboard from "../../components/ResumeAnalyticsDashboard";
 import HierarchicalTeamManagement from '../../components/HierarchicalTeamManagement'; // Updated import
 import AdminDashboard from '../../components/AdminDashboard';
+import TimeManagement from '../../components/TimeManagement'
 
 // Icons
 import { 
@@ -535,6 +536,15 @@ export default function RecruiterDashboard() {
           {isAdmin && activeTab === "team" && (
             <div className="p-6">
               <IntegratedTeamDashboard />
+            </div>
+          )}
+
+          {activeTab === "time-management" && (
+            <div className="p-6">
+              <TimeManagement 
+                user={session.user} 
+                isAdmin={isAdmin}
+              />
             </div>
           )}
 

@@ -1,3 +1,4 @@
+// app/api/recruiter/profile/route.js
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '../../../(client)/lib/auth'
@@ -14,6 +15,7 @@ export async function GET(request) {
       )
     }
 
+    // Get recruiter profile
     const recruiterProfile = await prisma.recruiter.findUnique({
       where: { userId: session.user.id },
       include: {
@@ -21,8 +23,7 @@ export async function GET(request) {
           select: {
             id: true,
             name: true,
-            email: true,
-            image: true
+            email: true
           }
         },
         adminRecruiter: {
@@ -42,18 +43,12 @@ export async function GET(request) {
       )
     }
 
-    // Determine if this is a main admin (admin with no adminId)
+    // Calculate additional properties
     const isMainAdmin = recruiterProfile.recruiterType === 'ADMIN' && !recruiterProfile.adminId
-
+    
     return NextResponse.json({
-      id: recruiterProfile.id,
-      userId: recruiterProfile.userId,
-      recruiterType: recruiterProfile.recruiterType,
-      department: recruiterProfile.department,
-      isActive: recruiterProfile.isActive,
+      ...recruiterProfile,
       isMainAdmin,
-      user: recruiterProfile.user,
-      adminRecruiter: recruiterProfile.adminRecruiter,
       permissions: {
         canCreateAdmins: isMainAdmin,
         canManageTeam: recruiterProfile.recruiterType === 'ADMIN',

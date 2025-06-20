@@ -8,6 +8,7 @@ import {
     Users, 
     TrendingUp,
     Shield,
+    Clock,
     ChevronDown
   } from "lucide-react"
   import { motion } from "framer-motion"
@@ -73,6 +74,14 @@ import {
         shortLabel: "Candidates",
         icon: UserPlus,
         description: "Manage your candidates",
+        badge: null
+      },
+      {
+        id: "time-management",
+        label: "Time Management", 
+        shortLabel: "Time",
+        icon: Clock,
+        description: "Track and manage work hours",
         badge: null
       },
       {

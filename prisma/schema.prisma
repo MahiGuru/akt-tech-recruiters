@@ -91,6 +91,9 @@ model User {
 
   passwordResetTokens PasswordResetToken[]
 
+  userTimeEntries     TimeEntry[] @relation("UserTimeEntries")
+  managerTimeReviews  TimeEntry[] @relation("ManagerTimeReviews")
+
   // Interview management
   scheduledInterviews   Interview[] @relation("RecruiterScheduledInterview")
   feedbackSubmissions   Interview[] @relation("InterviewFeedbackSubmitter")
@@ -374,9 +377,36 @@ model PlacementDocument {
   
   @@map("placement_documents")
 }
+model TimeEntry {
+  id              String        @id @default(cuid())
+  userId          String        // The team member who logged the time
+  date            DateTime      // Date for the time entry
+  hours           Decimal       @db.Decimal(4,2) // Hours worked (e.g., 8.50)
+  description     String?       // Optional description of work done
+  project         String?       // Optional project name
+  status          TimeEntryStatus @default(PENDING)
+  submittedAt     DateTime      @default(now())
+  reviewedAt      DateTime?     // When manager reviewed
+  reviewedById    String?       // Manager who reviewed
+  reviewComments  String?       // Manager's comments
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  user            User          @relation("UserTimeEntries", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy      User?         @relation("ManagerTimeReviews", fields: [reviewedById], references: [id])
+  
+  @@map("time_entries")
+}
 
 
 
+enum TimeEntryStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DRAFT
+}
 
 // Add these new enums to your existing enums section
 enum SalaryType {

@@ -87,14 +87,14 @@ const CandidateDetailModal = ({
                     <span>Added by {candidate.addedBy?.name}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs text-black">
                       {recruiterTypeInfo.label}
                     </span>
-                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                    <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs text-black">
                       Level {hierarchyInfo.level}
                     </span>
                     {hierarchyInfo.department && (
-                      <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs">
+                      <span className="px-2 py-1 bg-white bg-opacity-20 rounded text-xs text-black">
                         {hierarchyInfo.department}
                       </span>
                     )}

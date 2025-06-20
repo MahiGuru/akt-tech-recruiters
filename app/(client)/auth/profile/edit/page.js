@@ -103,7 +103,7 @@ export default function EditProfile() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center">
         <div className="loading-spinner w-8 h-8 text-primary-600" />
       </div>
     )
