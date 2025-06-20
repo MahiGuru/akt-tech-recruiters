@@ -7,7 +7,7 @@ import { prisma } from '../../../../(client)/lib/prisma'
 // Helper function to get team member IDs for admin
 async function getTeamMemberIds(adminUserId) {
   const visited = new Set()
-  const toVisit = [adminId]
+  const toVisit = [adminUserId]
 
   while (toVisit.length > 0) {
     const currentAdminId = toVisit.pop()
