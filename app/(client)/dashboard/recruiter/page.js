@@ -1,4 +1,4 @@
-// Updated app/(client)/dashboard/recruiter/page.js - Integration with new hierarchical team component
+// Updated app/(client)/dashboard/recruiter/page.js - Role-based tab restrictions
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
@@ -16,7 +16,7 @@ import CandidateManagement from "../../components/candidate-management";
 import BulkResumeUpload from "../../components/BulkResumeUpload";
 import ResumeMappingManager from "../../components/ResumeMappingManager";
 import ResumeAnalyticsDashboard from "../../components/ResumeAnalyticsDashboard";
-import HierarchicalTeamManagement from '../../components/HierarchicalTeamManagement'; // Updated import
+import HierarchicalTeamManagement from '../../components/HierarchicalTeamManagement';
 import AdminDashboard from '../../components/AdminDashboard';
 import TimeManagement from '../../components/TimeManagement'
 
@@ -79,6 +79,15 @@ export default function RecruiterDashboard() {
   const user = session?.user;
   const userId = user?.id;
   const isAdmin = useMemo(() => user?.recruiterProfile?.recruiterType === "ADMIN", [user?.recruiterProfile?.recruiterType]);
+  
+  // NEW: Get user's recruiter type for role-based access control
+  const userRecruiterType = useMemo(() => user?.recruiterProfile?.recruiterType || 'JUNIOR', [user?.recruiterProfile?.recruiterType]);
+
+  // NEW: Check if user can access restricted tabs
+  const canAccessRestrictedTabs = useMemo(() => {
+    const allowedRoles = ['ADMIN', 'LEAD', 'HR', 'CS'];
+    return allowedRoles.includes(userRecruiterType);
+  }, [userRecruiterType]);
 
   // Candidate status options (memoized)
   const candidateStatuses = useMemo(() => [
@@ -124,14 +133,15 @@ export default function RecruiterDashboard() {
 
       // Fetch all required data in parallel - Updated to use hierarchy API for admins
       const [candidatesData, analyticsData, notificationsData, teamData] = await Promise.all([
-        fetchWithCache("/api/recruiter/candidates", "candidates", true),
-        fetchWithCache("/api/recruiter/resumes/analytics", "analytics", true),
+        // Only fetch candidates if user has access to restricted tabs
+        canAccessRestrictedTabs ? fetchWithCache("/api/recruiter/candidates", "candidates", true) : Promise.resolve(null),
+        canAccessRestrictedTabs ? fetchWithCache("/api/recruiter/resumes/analytics", "analytics", true) : Promise.resolve(null),
         fetchWithCache("/api/recruiter/notifications", "notifications", true),
         isAdmin ? fetchWithCache("/api/recruiter/team/hierarchy", "team-hierarchy", true) : Promise.resolve(null)
       ]);
 
       // Update state
-      if (candidatesData) {
+      if (candidatesData && canAccessRestrictedTabs) {
         const candidatesList = candidatesData.candidates || candidatesData;
         setCandidates(candidatesList);
         
@@ -142,7 +152,7 @@ export default function RecruiterDashboard() {
         setStats(prev => ({ ...prev, candidatesByStatus: statusDistribution }));
       }
 
-      if (analyticsData) {
+      if (analyticsData && canAccessRestrictedTabs) {
         setResumeAnalytics(analyticsData);
         setStats(prev => ({
           ...prev,
@@ -207,12 +217,20 @@ export default function RecruiterDashboard() {
       setIsLoading(false);
       initRef.current.isInitializing = false;
     }
-  }, [userId, isAdmin, fetchWithCache]);
+  }, [userId, isAdmin, fetchWithCache, canAccessRestrictedTabs]);
 
   // Handle tab changes without full reloads
   const handleTabChange = useCallback((newTab) => {
+    // NEW: Prevent access to restricted tabs for unauthorized users
+    const restrictedTabs = ['candidates', 'team', 'bulk-upload', 'resume-mapping', 'resumes'];
+    
+    if (restrictedTabs.includes(newTab) && !canAccessRestrictedTabs) {
+      toast.error(`Access denied: ${userRecruiterType} role cannot access this feature`);
+      return;
+    }
+    
     setActiveTab(newTab);
-  }, []);
+  }, [canAccessRestrictedTabs, userRecruiterType]);
 
   // Notification functions
   const markNotificationAsRead = useCallback(async (notificationId) => {
@@ -251,6 +269,11 @@ export default function RecruiterDashboard() {
 
   // Quick status update
   const handleQuickStatusUpdate = useCallback(async (candidateId, newStatus, candidateName) => {
+    if (!canAccessRestrictedTabs) {
+      toast.error("Access denied: You cannot update candidate status");
+      return;
+    }
+
     try {
       const response = await fetch('/api/recruiter/candidates', {
         method: 'PUT',
@@ -278,10 +301,12 @@ export default function RecruiterDashboard() {
       console.error('Status update error:', error);
       toast.error('Something went wrong');
     }
-  }, []);
+  }, [canAccessRestrictedTabs]);
 
   // Optimized upload/update handlers
   const handleUploadSuccess = useCallback(async () => {
+    if (!canAccessRestrictedTabs) return;
+    
     dataCache.current.delete('resumes');
     dataCache.current.delete('analytics');
     
@@ -294,9 +319,11 @@ export default function RecruiterDashboard() {
     if (analyticsData) setResumeAnalytics(analyticsData);
     
     toast.success("Upload successful!");
-  }, [fetchWithCache]);
+  }, [fetchWithCache, canAccessRestrictedTabs]);
 
   const handleMappingUpdate = useCallback(async () => {
+    if (!canAccessRestrictedTabs) return;
+    
     ['resumes', 'candidates', 'analytics'].forEach(key => dataCache.current.delete(key));
     
     const [resumesData, candidatesData, analyticsData] = await Promise.all([
@@ -308,9 +335,9 @@ export default function RecruiterDashboard() {
     if (resumesData) setResumes(resumesData.resumes || resumesData);
     if (candidatesData) setCandidates(candidatesData.candidates || candidatesData);
     if (analyticsData) setResumeAnalytics(analyticsData);
-  }, [fetchWithCache]);
+  }, [fetchWithCache, canAccessRestrictedTabs]);
 
-  // Regular Dashboard Component (memoized)
+  // Regular Dashboard Component (memoized) - Updated for restricted access
   const RegularRecruiterDashboard = useMemo(() => (
     <div className="space-y-8">
       <motion.div
@@ -321,7 +348,26 @@ export default function RecruiterDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold mb-2">Welcome back, {user?.name}!</h1>
-            <p className="text-blue-100 text-lg">Here&apos;s your recruiting overview for today</p>
+            <p className="text-blue-100 text-lg">
+              {canAccessRestrictedTabs 
+                ? "Here's your recruiting overview for today" 
+                : "Track your time and view dashboard insights"
+              }
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                canAccessRestrictedTabs 
+                  ? 'bg-green-500 bg-opacity-20 text-green-100' 
+                  : 'bg-yellow-500 bg-opacity-20 text-yellow-100'
+              }`}>
+                {userRecruiterType} Role
+              </span>
+              {canAccessRestrictedTabs && (
+                <span className="px-3 py-1 bg-blue-500 bg-opacity-20 text-blue-100 rounded-full text-sm font-medium">
+                  Full Access
+                </span>
+              )}
+            </div>
           </div>
           <div className="bg-white bg-opacity-20 rounded-xl p-4">
             <Activity className="w-12 h-12 text-white" />
@@ -330,7 +376,8 @@ export default function RecruiterDashboard() {
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
+        {/* Show different cards based on access level */}
+        {(canAccessRestrictedTabs ? [
           {
             title: "Your Candidates",
             value: candidates.length,
@@ -363,7 +410,38 @@ export default function RecruiterDashboard() {
             icon: Award,
             color: "orange"
           }
-        ].map((card, index) => (
+        ] : [
+          {
+            title: "Time Management",
+            value: "Track Hours",
+            subtitle: "Log and manage time",
+            icon: Clock,
+            color: "blue",
+            onClick: () => handleTabChange('time-management')
+          },
+          {
+            title: "Dashboard Insights",
+            value: "View Stats",
+            subtitle: "Performance overview",
+            icon: BarChart3,
+            color: "green",
+            onClick: () => handleTabChange('dashboard')
+          },
+          {
+            title: "Your Role",
+            value: userRecruiterType,
+            subtitle: "Current access level",
+            icon: Users,
+            color: "purple"
+          },
+          {
+            title: "Notifications",
+            value: unreadCount,
+            subtitle: "Unread messages",
+            icon: Activity,
+            color: "orange"
+          }
+        ]).map((card, index) => (
           <motion.div
             key={card.title}
             initial={{ opacity: 0, scale: 0.9 }}
@@ -386,72 +464,97 @@ export default function RecruiterDashboard() {
         ))}
       </div>
 
-      {/* Recent candidates section */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Candidates</h3>
-          <button
-            onClick={() => handleTabChange('candidates')}
-            className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-          >
-            View All →
-          </button>
-        </div>
+      {/* Access Level Notice for Limited Users */}
+      {!canAccessRestrictedTabs && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-yellow-50 border border-yellow-200 rounded-xl p-6"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <Clock className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-yellow-900">Limited Access</h3>
+              <p className="text-yellow-800">
+                Your <strong>{userRecruiterType}</strong> role has access to Time Management and Dashboard features. 
+                For candidate management and recruiting tools, contact your administrator.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
-        {candidates.length === 0 ? (
-          <div className="text-center py-8">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h4 className="text-lg font-medium text-gray-900 mb-2">No candidates yet</h4>
-            <p className="text-gray-600 mb-4">Start by adding your first candidate</p>
+      {/* Recent candidates section - Only for users with access */}
+      {canAccessRestrictedTabs && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Recent Candidates</h3>
             <button
               onClick={() => handleTabChange('candidates')}
-              className="btn btn-primary"
+              className="text-blue-600 hover:text-blue-700 font-medium text-sm"
             >
-              <Users className="w-4 h-4" />
-              Add Candidate
+              View All →
             </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {candidates.slice(0, 5).map((candidate, index) => (
-              <motion.div
-                key={candidate.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.6 + index * 0.1 }}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+
+          {candidates.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h4 className="text-lg font-medium text-gray-900 mb-2">No candidates yet</h4>
+              <p className="text-gray-600 mb-4">Start by adding your first candidate</p>
+              <button
+                onClick={() => handleTabChange('candidates')}
+                className="btn btn-primary"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Users className="w-5 h-5 text-blue-600" />
+                <Users className="w-4 h-4" />
+                Add Candidate
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {candidates.slice(0, 5).map((candidate, index) => (
+                <motion.div
+                  key={candidate.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.6 + index * 0.1 }}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <Users className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">{candidate.name}</h4>
+                      <p className="text-sm text-gray-600">{candidate.email}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">{candidate.name}</h4>
-                    <p className="text-sm text-gray-600">{candidate.email}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      candidateStatuses.find(s => s.value === candidate.status)?.color || 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {candidate.status.replace('_', ' ')}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(candidate.createdAt).toLocaleDateString()}
+                    </span>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    candidateStatuses.find(s => s.value === candidate.status)?.color || 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {candidate.status.replace('_', ' ')}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {new Date(candidate.createdAt).toLocaleDateString()}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </motion.div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
-  ), [candidates, stats, user, candidateStatuses, handleTabChange]);
+  ), [candidates, stats, user, candidateStatuses, handleTabChange, canAccessRestrictedTabs, userRecruiterType, unreadCount]);
 
   // Effect to initialize dashboard (minimal dependencies)
   useEffect(() => {
@@ -509,11 +612,13 @@ export default function RecruiterDashboard() {
           candidates={candidates} 
           isAdmin={isAdmin} 
           onTabChange={handleTabChange}
+          canAccessRestrictedTabs={canAccessRestrictedTabs}
         />
         <DashboardTabs
           activeTab={activeTab}
           setActiveTab={handleTabChange}
           isAdmin={isAdmin}
+          userRecruiterType={userRecruiterType}
         />
 
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 min-h-[600px]">
@@ -524,21 +629,57 @@ export default function RecruiterDashboard() {
             </div>
           )}
 
-          {/* Candidates Tab */}
-          {activeTab === "candidates" && (
-            <div className="p-6">
-              <CandidateManagement />
-            </div>
+          {/* Restricted Tabs - Only for authorized roles */}
+          {canAccessRestrictedTabs && (
+            <>
+              {/* Candidates Tab */}
+              {activeTab === "candidates" && (
+                <div className="p-6">
+                  <CandidateManagement />
+                </div>
+              )}
+
+              {/* Team Tab - Admin only */}
+              {isAdmin && activeTab === "team" && (
+                <div className="p-6">
+                  <IntegratedTeamDashboard />
+                </div>
+              )}
+
+              {/* Bulk Upload Tab */}
+              {activeTab === "bulk-upload" && (
+                <div className="p-6">
+                  <BulkResumeUpload
+                    candidates={candidates}
+                    onUploadSuccess={handleUploadSuccess}
+                    onUploadError={(msg) => toast.error(msg)}
+                  />
+                </div>
+              )}
+
+              {/* Resume Mapping Tab */}
+              {activeTab === "resume-mapping" && (
+                <div className="p-6">
+                  <ResumeMappingManager
+                    candidates={candidates}
+                    onMappingUpdate={handleMappingUpdate}
+                  />
+                </div>
+              )}
+
+              {/* Resumes Tab */}
+              {activeTab === "resumes" && (
+                <div className="p-6">
+                  <ResumeDatabase
+                    isAdmin={isAdmin}
+                    currentUserId={userId}
+                  />
+                </div>
+              )}
+            </>
           )}
 
-
-          {/* Updated Admin tabs to use new hierarchical component */}
-          {isAdmin && activeTab === "team" && (
-            <div className="p-6">
-              <IntegratedTeamDashboard />
-            </div>
-          )}
-
+          {/* Time Management - Available to all roles */}
           {activeTab === "time-management" && (
             <div className="p-6">
               <TimeManagement 
@@ -548,54 +689,45 @@ export default function RecruiterDashboard() {
             </div>
           )}
 
-          {/* Other tabs remain the same... */}
-          {activeTab === "bulk-upload" && (
-            <div className="p-6">
-              <BulkResumeUpload
-                candidates={candidates}
-                onUploadSuccess={handleUploadSuccess}
-                onUploadError={(msg) => toast.error(msg)}
-              />
-            </div>
-          )}
-
-          {activeTab === "resume-mapping" && (
-            <div className="p-6">
-              <ResumeMappingManager
-                candidates={candidates}
-                onMappingUpdate={handleMappingUpdate}
-              />
-            </div>
-          )}
-
-          {activeTab === "resumes" && (
-            <div className="p-6">
-              <ResumeDatabase
-                isAdmin={isAdmin}
-                currentUserId={userId}
-              />
-            </div>
-          )}
-
-          {isAdmin && activeTab === "analytics" && (
-            <div className="p-6">
-              <ResumeAnalyticsDashboard />
+          {/* Show access denied message for unauthorized tab access */}
+          {!canAccessRestrictedTabs && ['candidates', 'team', 'bulk-upload', 'resume-mapping', 'resumes'].includes(activeTab) && (
+            <div className="p-6 flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="w-10 h-10 text-red-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h3>
+                <p className="text-gray-600 mb-4">
+                  Your <strong>{userRecruiterType}</strong> role does not have access to this feature.
+                </p>
+                <p className="text-sm text-gray-500 mb-6">
+                  Only Admin, Lead, HR, and Customer Success roles can access candidate management and recruiting tools.
+                </p>
+                <button
+                  onClick={() => handleTabChange('dashboard')}
+                  className="btn btn-primary"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Status Modal */}
-      <QuickStatusModal
-        open={showQuickStatusModal}
-        candidate={selectedCandidateForStatus}
-        candidateStatuses={candidateStatuses}
-        onClose={() => {
-          setShowQuickStatusModal(false);
-          setSelectedCandidateForStatus(null);
-        }}
-        onStatusChange={handleQuickStatusUpdate}
-      />
+      {/* Status Modal - Only for authorized users */}
+      {canAccessRestrictedTabs && (
+        <QuickStatusModal
+          open={showQuickStatusModal}
+          candidate={selectedCandidateForStatus}
+          candidateStatuses={candidateStatuses}
+          onClose={() => {
+            setShowQuickStatusModal(false);
+            setSelectedCandidateForStatus(null);
+          }}
+          onStatusChange={handleQuickStatusUpdate}
+        />
+      )}
 
       {/* Notifications */}
       {unreadCount > 0 && (

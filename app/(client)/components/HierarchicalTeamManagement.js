@@ -1,4 +1,4 @@
-// app/(client)/components/HierarchicalTeamManagement.js
+// app/(client)/components/HierarchicalTeamManagement.js - Updated with password options
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -26,7 +26,8 @@ import {
   Eye,
   EyeOff,
   MoreVertical,
-  User as UserIcon
+  User as UserIcon,
+  Key // Added for password icon
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -259,8 +260,7 @@ export default function HierarchicalTeamManagement() {
   const [selectedMember, setSelectedMember] = useState(null)
   const [expandedNodes, setExpandedNodes] = useState(new Set())
   const [stats, setStats] = useState({})
-  
-  // Add member form state
+
   const [addMemberForm, setAddMemberForm] = useState({
     name: '',
     email: '',
@@ -329,6 +329,18 @@ export default function HierarchicalTeamManagement() {
     e.preventDefault()
     
     try {
+      // Validate custom password if not generating one
+      if (!addMemberForm.generatePassword) {
+        if (!addMemberForm.customPassword) {
+          toast.error('Please enter a custom password')
+          return
+        }
+        if (addMemberForm.customPassword.length < 8) {
+          toast.error('Password must be at least 8 characters long')
+          return
+        }
+      }
+
       const password = addMemberForm.generatePassword 
         ? generateRandomPassword() 
         : addMemberForm.customPassword
@@ -355,9 +367,23 @@ export default function HierarchicalTeamManagement() {
         const result = await response.json()
         toast.success(`🎉 ${addMemberForm.name} added successfully!`)
         
+        // Show generated password if one was created
         if (addMemberForm.generatePassword) {
-          toast.success(`Default password: ${password}`, { duration: 10000 })
-        }
+        //   toast.success(
+        //     `Generated password: ${password}\n\nPlease share this with ${addMemberForm.name} securely.`, 
+        //     { 
+        //       duration: 15000,
+        //       style: {
+        //         background: '#065f46',
+        //         color: 'white',
+        //         fontSize: '14px',
+        //         maxWidth: '500px'
+        //       }
+        //     }
+        //   )
+        // } else {
+        //   toast.success(`Custom password has been set successfully.`)
+        // }
         
         setShowAddModal(false)
         resetAddForm()
@@ -680,7 +706,7 @@ export default function HierarchicalTeamManagement() {
         </div>
       </div>
 
-      {/* Add Member Modal - Enhanced with admin restrictions */}
+      {/* Add Member Modal - Enhanced with admin restrictions and password options */}
       <AnimatePresence>
         {showAddModal && (
           <motion.div
@@ -761,6 +787,74 @@ export default function HierarchicalTeamManagement() {
                   />
                 </div>
 
+                {/* Password Section */}
+                <div className="form-group">
+                  <label className="form-label required">Password Setup</label>
+                  <div className="space-y-4">
+                    {/* Password Type Selection */}
+                    <div className="flex items-center gap-6">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="passwordType"
+                          checked={addMemberForm.generatePassword}
+                          onChange={() => setAddMemberForm(prev => ({ 
+                            ...prev, 
+                            generatePassword: true, 
+                            customPassword: '' 
+                          }))}
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Generate secure password</span>
+                      </label>
+                      
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="passwordType"
+                          checked={!addMemberForm.generatePassword}
+                          onChange={() => setAddMemberForm(prev => ({ 
+                            ...prev, 
+                            generatePassword: false 
+                          }))}
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Set custom password</span>
+                      </label>
+                    </div>
+
+                    {/* Custom Password Input */}
+                    {!addMemberForm.generatePassword && (
+                      <div className="space-y-2">
+                        <input
+                          type="password"
+                          value={addMemberForm.customPassword}
+                          onChange={(e) => setAddMemberForm(prev => ({ 
+                            ...prev, 
+                            customPassword: e.target.value 
+                          }))}
+                          className="input-field py-3"
+                          placeholder="Enter password (min 8 characters)"
+                          minLength="8"
+                          required={!addMemberForm.generatePassword}
+                        />
+                        <p className="text-xs text-gray-500">
+                          Password must be at least 8 characters long
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Generated Password Info */}
+                    {addMemberForm.generatePassword && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <p className="text-sm text-blue-800">
+                          🔐 A secure password will be automatically generated and displayed after the team member is created.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Role Selection with Admin Restriction */}
                 <div className="form-group">
                   <label className="form-label required">Role</label>
@@ -815,7 +909,11 @@ export default function HierarchicalTeamManagement() {
                   <button
                     type="submit"
                     className="btn btn-primary px-8 py-3"
-                    disabled={!addMemberForm.name || !addMemberForm.email}
+                    disabled={
+                      !addMemberForm.name || 
+                      !addMemberForm.email || 
+                      (!addMemberForm.generatePassword && (!addMemberForm.customPassword || addMemberForm.customPassword.length < 8))
+                    }
                   >
                     <Plus className="w-5 h-5" />
                     Add Team Member
