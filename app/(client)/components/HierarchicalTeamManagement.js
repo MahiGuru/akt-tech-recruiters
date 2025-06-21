@@ -368,7 +368,7 @@ export default function HierarchicalTeamManagement() {
         toast.success(`🎉 ${addMemberForm.name} added successfully!`)
         
         // Show generated password if one was created
-        if (addMemberForm.generatePassword) {
+        // if (addMemberForm.generatePassword) {
         //   toast.success(
         //     `Generated password: ${password}\n\nPlease share this with ${addMemberForm.name} securely.`, 
         //     { 
