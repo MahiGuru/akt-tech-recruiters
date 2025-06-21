@@ -112,6 +112,43 @@ const CandidateDetailModal = ({
         </div>
         
         <div className="p-6 max-h-[70vh] overflow-y-auto">
+          {/* Enhanced User Account Status */}
+          {candidate.createdUserId && candidate.createdUser && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-green-900">Team Member Account Created</h4>
+                  <p className="text-sm text-green-700">This candidate has been converted to a team member</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-green-600 font-medium">Role:</span>
+                  <span className="ml-2">{candidate.createdUser.role}</span>
+                  {candidate.createdUser.recruiterProfile && (
+                    <span className="ml-1 text-green-600">
+                      ({candidate.createdUser.recruiterProfile.recruiterType})
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-green-600 font-medium">Account Email:</span>
+                  <span className="ml-2">{candidate.createdUser.email}</span>
+                </div>
+                <div>
+                  <span className="text-green-600 font-medium">Created:</span>
+                  <span className="ml-2">{new Date(candidate.userCreatedAt).toLocaleDateString()}</span>
+                </div>
+                <div>
+                  <span className="text-green-600 font-medium">Created by:</span>
+                  <span className="ml-2">{candidate.userCreator?.name || 'System'}</span>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Basic Info with Enhanced Hierarchy Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <div>

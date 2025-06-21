@@ -1,6 +1,7 @@
+// app/(client)/components/candidate-management/components/CardHeader.js (Updated)
 'use client'
 
-import { Users, Mail, Phone, MapPin, Calendar, Eye, Edit, ChevronDown, ChevronUp, AlertCircle, IndianRupeeIcon, UserCheck, Crown, Shield } from 'lucide-react'
+import { Users, Mail, Phone, MapPin, Calendar, Eye, Edit, ChevronDown, ChevronUp, AlertCircle, IndianRupeeIcon, UserCheck, Crown, Shield, UserPlus, CheckCircle } from 'lucide-react'
 import { getStatusColor } from '../utils/helpers'
 
 const CardHeader = ({
@@ -14,6 +15,7 @@ const CardHeader = ({
   onEdit,
   onToggleExpand,
   onManagePlacement,
+  onCreateUser = null, // NEW: User creation handler with default
   isExpanded
 }) => {
   // Helper function to get recruiter type badge
@@ -47,6 +49,10 @@ const CardHeader = ({
   const hierarchyDisplay = getHierarchyDisplay(candidate.hierarchyInfo)
   const recruiterBadge = getRecruiterTypeBadge(candidate.hierarchyInfo?.recruiterType)
 
+  // NEW: Check if user can be created for this candidate
+  const canCreateUser = candidate.status === 'PLACED' && !candidate.createdUserId
+  const hasUserAccount = !!candidate.createdUserId
+
   return (
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-4 flex-1">
@@ -65,6 +71,26 @@ const CardHeader = ({
             >
               {candidate.status.replace("_", " ")}
             </span>
+            
+            {/* NEW: User Account Status Indicators */}
+            {hasUserAccount && (
+              <span className="px-2 py-1 bg-green-100 text-green-800 border border-green-200 rounded-full text-xs font-medium flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" />
+                Team Member
+              </span>
+            )}
+            
+            {canCreateUser && onCreateUser && (
+              <button
+                onClick={() => onCreateUser(candidate)}
+                className="px-2 py-1 bg-blue-600 text-white rounded-full text-xs hover:bg-blue-700 flex items-center gap-1 font-medium"
+                title="Create User Account"
+              >
+                <UserPlus className="w-3 h-3" />
+                Create Account
+              </button>
+            )}
+
             {candidate.status === "PLACED" && (
               <button
                 onClick={() => onManagePlacement(candidate)}
@@ -96,7 +122,25 @@ const CardHeader = ({
             )}
           </div>
 
-          {/* NEW: Hierarchy Information Display */}
+          {/* NEW: Enhanced User Account Info */}
+          {hasUserAccount && candidate.createdUser && (
+            <div className="flex items-center gap-3 text-xs bg-green-50 rounded px-2 py-1 mb-2">
+              <div className="flex items-center gap-1">
+                <UserCheck className="w-3 h-3 text-green-600" />
+                <span className="text-green-800 font-medium">
+                  Created as: {candidate.createdUser.role}
+                  {candidate.createdUser.workType && 
+                    ` (${candidate.createdUser.workType.replace('_', ' ')})`
+                  }
+                </span>
+              </div>
+              <div className="text-green-600">
+                Created: {new Date(candidate.userCreatedAt).toLocaleDateString()}
+              </div>
+            </div>
+          )}
+
+          {/* Existing Hierarchy Information Display */}
           {hierarchyDisplay && (
             <div className="flex items-center gap-3 text-xs">
               <div className="flex items-center gap-2">
@@ -128,15 +172,6 @@ const CardHeader = ({
                   </span>
                 </div>
               )}
-
-              {/* {hierarchyDisplay.manager !== 'No Manager' && (
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-500">Reports to:</span>
-                  <span className="font-medium text-gray-700">
-                    {hierarchyDisplay.manager}
-                  </span>
-                </div>
-              )} */}
             </div>
           )}
 

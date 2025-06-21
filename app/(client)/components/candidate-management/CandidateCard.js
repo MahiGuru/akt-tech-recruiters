@@ -32,6 +32,7 @@ const EnhancedCandidateCard = ({
   isExpanded,
   onToggleExpand,
   isAdmin,
+  onCreateUser = null, // Optional user creation handler
 }) => {
   const [showInterviewHistory, setShowInterviewHistory] = useState(false)
   const [showActionRequired, setShowActionRequired] = useState(false)
@@ -65,6 +66,7 @@ const EnhancedCandidateCard = ({
           onEdit={onEdit}
           onToggleExpand={onToggleExpand}
           onManagePlacement={onManagePlacement}
+          onCreateUser={onCreateUser}
           isExpanded={isExpanded}
         />
 

@@ -1,4 +1,4 @@
-// app/(client)/components/candidate-management/index.js
+// app/(client)/components/candidate-management/index.js (Updated with User Creation)
 'use client'
 
 import { useState, useMemo } from 'react'
@@ -16,6 +16,7 @@ import CandidateDetailModal from './components/CandidateDetailModal'
 import EnhancedCandidateCard from './CandidateCard'
 import InterviewFeedbackModal from '../InterviewFeedbackModal'
 import PlacementManagement from './PlacementManagement'
+import CreateUserModal from './components/CreateUserModal' // NEW
 
 // Utils
 import { getCandidatePriority } from './utils/priorityCalculator'
@@ -38,7 +39,8 @@ const CandidateManagement = () => {
     getCandidateDetails,
     updateCandidateInterview,
     updateCandidatePlacement,
-    fetchResumes
+    fetchResumes,
+    setCandidates // NEW: For updating local state after user creation
   } = useCandidateData()
 
   // Filter state
@@ -55,6 +57,7 @@ const CandidateManagement = () => {
   const [showInterviewModal, setShowInterviewModal] = useState(false)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false)
   const [showPlacementModal, setShowPlacementModal] = useState(false)
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false) // NEW
   
   // Selected items
   const [selectedCandidate, setSelectedCandidate] = useState(null)
@@ -120,6 +123,39 @@ const CandidateManagement = () => {
   const handleManagePlacement = (candidate) => {
     setSelectedCandidate(candidate)
     setShowPlacementModal(true)
+  }
+
+  // NEW: User creation handler
+  const handleCreateUser = (candidate) => {
+    setSelectedCandidate(candidate)
+    setShowCreateUserModal(true)
+  }
+
+  // NEW: Handle successful user creation
+  const handleUserCreated = (result) => {
+    // Update the candidate in local state with user creation info
+    setCandidates(prevCandidates => 
+      prevCandidates.map(candidate => 
+        candidate.id === result.candidate.id 
+          ? {
+              ...candidate,
+              createdUserId: result.candidate.createdUserId,
+              userCreatedAt: result.candidate.userCreatedAt,
+              createdUser: result.user
+            }
+          : candidate
+      )
+    )
+
+    // Update selectedCandidate if it's the same one
+    if (selectedCandidate?.id === result.candidate.id) {
+      setSelectedCandidate(prev => ({
+        ...prev,
+        createdUserId: result.candidate.createdUserId,
+        userCreatedAt: result.candidate.userCreatedAt,
+        createdUser: result.user
+      }))
+    }
   }
 
   const handleInterviewScheduleSuccess = (interviewData) => {
@@ -265,6 +301,7 @@ const CandidateManagement = () => {
               onScheduleInterview={handleScheduleInterview}
               onRescheduleInterview={handleRescheduleInterview}
               onManagePlacement={handleManagePlacement}
+              onCreateUser={handleCreateUser} // NEW: Pass user creation handler
               onInterviewFeedback={handleInterviewFeedback}
               isExpanded={expandedCards.has(candidate.id)}
               onToggleExpand={toggleExpanded}
@@ -382,6 +419,19 @@ const CandidateManagement = () => {
             }}
             candidate={selectedCandidate}
             onPlacementUpdate={handlePlacementUpdate}
+          />
+        )}
+
+        {/* NEW: Create User Modal */}
+        {showCreateUserModal && selectedCandidate && (
+          <CreateUserModal
+            isOpen={showCreateUserModal}
+            onClose={() => {
+              setShowCreateUserModal(false)
+              setSelectedCandidate(null)
+            }}
+            candidate={selectedCandidate}
+            onUserCreated={handleUserCreated}
           />
         )}
 

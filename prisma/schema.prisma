@@ -13,15 +13,14 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
@@ -47,68 +46,61 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  role          Role      @default(EMPLOYEE)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                                                                String                   @id @default(cuid())
+  name                                                              String?
+  email                                                             String                   @unique
+  emailVerified                                                     DateTime?
+  image                                                             String?
+  password                                                          String?
+  role                                                              Role                     @default(EMPLOYEE)
+  createdAt                                                         DateTime                 @default(now())
+  updatedAt                                                         DateTime                 @updatedAt
+  phone                                                             String?
+  location                                                          String?
+  experience                                                        Int?
+  skills                                                            String[]
+  resumeUrl                                                         String?
+  bio                                                               String?
+  accounts                                                          Account[]
+  applications                                                      Application[]
+  recruiterApplications                                             Application[]            @relation("RecruiterSubmittedApplication")
+  addedCandidates                                                   Candidate[]              @relation("RecruiterAddedCandidate")
+  feedbackSubmissions                                               Interview[]              @relation("InterviewFeedbackSubmitter")
+  scheduledInterviews                                               Interview[]              @relation("RecruiterScheduledInterview")
+  jobPosts                                                          Job[]
+  receivedNotifications                                             Notification[]           @relation("NotificationReceiver")
+  sentNotifications                                                 Notification[]           @relation("NotificationSender")
+  passwordResetTokens                                               PasswordResetToken[]
+  placementDocuments                                                PlacementDocument[]      @relation("PlacementDocumentUploader")
+  placement_time_entries_placement_time_entries_reviewedByIdTousers placement_time_entries[] @relation("placement_time_entries_reviewedByIdTousers")
+  placement_time_entries_placement_time_entries_userIdTousers       placement_time_entries[] @relation("placement_time_entries_userIdTousers")
+  placementCreated                                                  Placement[]              @relation("PlacementCreatedBy")
+  placementUpdated                                                  Placement[]              @relation("PlacementUpdatedBy")
+  managedRecruiters                                                 Recruiter[]              @relation("AdminRecruiter")
+  recruiterProfile                                                  Recruiter?
+  Resume                                                            Resume[]
+  sessions                                                          Session[]
+  managerTimeReviews                                                TimeEntry[]              @relation("ManagerTimeReviews")
+  userTimeEntries                                                   TimeEntry[]              @relation("UserTimeEntries")
+  workType                                                          String?
 
-  // Employee specific fields
-  phone        String?
-  location     String?
-  experience   Int?
-  skills       String[]
-  resumeUrl    String?
-  bio          String?
-  
-  // NextAuth relations
-  accounts Account[]
-  sessions Session[]
-  
-  // App relations
-  jobPosts     Job[]
-  applications Application[]
-  Resume       Resume[]
-  
-  // Recruiter relations
-  recruiterProfile      Recruiter?
-  managedRecruiters     Recruiter[]  @relation("AdminRecruiter")
-  sentNotifications     Notification[] @relation("NotificationSender")
-  receivedNotifications Notification[] @relation("NotificationReceiver")
-  
-  // Candidate management
-  addedCandidates       Candidate[] @relation("RecruiterAddedCandidate")
-  recruiterApplications Application[] @relation("RecruiterSubmittedApplication")
-  
-  // Placement relations
-  placementCreated      Placement[] @relation("PlacementCreatedBy")
-  placementUpdated      Placement[] @relation("PlacementUpdatedBy") 
-  placementDocuments    PlacementDocument[] @relation("PlacementDocumentUploader")
 
-  passwordResetTokens PasswordResetToken[]
-
-  userTimeEntries     TimeEntry[] @relation("UserTimeEntries")
-  managerTimeReviews  TimeEntry[] @relation("ManagerTimeReviews")
-
-  // Interview management
-  scheduledInterviews   Interview[] @relation("RecruiterScheduledInterview")
-  feedbackSubmissions   Interview[] @relation("InterviewFeedbackSubmitter")
+  createdFromCandidate  Candidate[] @relation("CandidateCreatedUser")
+  candidateUsersCreated Candidate[] @relation("CandidateUserCreator")
 
   @@map("users")
 }
+
 model PasswordResetToken {
   id        String   @id @default(cuid())
   token     String   @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expires   DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("password_reset_tokens")
 }
 
@@ -118,288 +110,283 @@ model Recruiter {
   recruiterType  RecruiterType @default(TA)
   department     String?
   isActive       Boolean       @default(true)
-  adminId        String?       // Reference to admin recruiter
+  adminId        String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
-
-  // Relations
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   adminRecruiter User?         @relation("AdminRecruiter", fields: [adminId], references: [id])
-  
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("recruiters")
 }
 
 model Candidate {
-  id           String   @id @default(cuid())
-  name         String
-  email        String
-  phone        String?
-  location     String?
-  experience   Int?
-  skills       String[]
-  bio          String?
-  source       String?  // Where the candidate was found (LinkedIn, referral, etc.)
-  notes        String?  // Recruiter notes about the candidate
-  status       CandidateStatus @default(ACTIVE)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id         String          @id @default(cuid())
+  name       String
+  email      String
+  phone      String?
+  location   String?
+  experience Int?
+  skills     String[]
+  bio        String?
+  source     String? // Where the candidate was found (LinkedIn, referral, etc.)
+  notes      String? // Recruiter notes about the candidate
+  status     CandidateStatus @default(ACTIVE)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  // NEW: User creation tracking
+  createdUserId String? // User account created from this candidate
+  userCreatedAt DateTime? // When user account was created
+  userCreatedBy String? // Who created the user account
 
   // Relations
-  addedById    String   // Recruiter who added this candidate
-  addedBy      User     @relation("RecruiterAddedCandidate", fields: [addedById], references: [id])
-  
-  resumes      Resume[]
-  applications Application[]
-  interviews   Interview[]
-  placement    Placement?
+  addedById String // Recruiter who added this candidate
+  addedBy   User   @relation("RecruiterAddedCandidate", fields: [addedById], references: [id])
+
+  // NEW: User creation relations
+  createdUser User? @relation("CandidateCreatedUser", fields: [createdUserId], references: [id])
+  userCreator User? @relation("CandidateUserCreator", fields: [userCreatedBy], references: [id])
+
+  resumes                Resume[]
+  applications           Application[]
+  interviews             Interview[]
+  placement              Placement?
+  placement_time_entries placement_time_entries[]
+
   @@unique([email, addedById]) // Prevent duplicate candidates by same recruiter
   @@map("candidates")
 }
 
-// Interview model with feedback fields
 model Interview {
-  id           String          @id @default(cuid())
-  title        String          // Interview title (e.g., "Technical Interview", "HR Round")
-  description  String?         // Additional details about the interview
-  scheduledAt  DateTime        // Interview date and time
-  duration     Int             @default(60) // Duration in minutes
-  meetingLink  String?         // Video call link or meeting room
-  notes        String?         // Recruiter notes about the interview
-  status       InterviewStatus @default(SCHEDULED)
-  reminderSent Boolean         @default(false) // Track if 15-min reminder was sent
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  
-  // NEW: Feedback fields
-  outcome                 String?        // EXCELLENT, GOOD, AVERAGE, POOR
-  overallRating          Int?           // 1-5 rating
-  technicalRating        Int?           // 1-5 rating
-  communicationRating    Int?           // 1-5 rating
-  culturalFitRating      Int?           // 1-5 rating
-  strengths              String?        // Positive aspects
-  weaknesses             String?        // Areas for improvement
-  feedback               String?        // Detailed feedback
-  nextSteps              String?        // Recommended next steps
-  recommendations        String?        // Additional recommendations
-  wouldRecommendHiring   Boolean?       // Hiring recommendation
-  feedbackSubmitted      Boolean        @default(false)
-  feedbackSubmittedAt    DateTime?      // When feedback was submitted
-  feedbackSubmittedById  String?        // Who submitted the feedback
-  
-  // Relations
-  candidateId  String
-  candidate    Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  
-  scheduledById String         // Recruiter who scheduled the interview
-  scheduledBy   User           @relation("RecruiterScheduledInterview", fields: [scheduledById], references: [id])
-  
-  // NEW: Feedback submitter relation
-  feedbackSubmitter User?      @relation("InterviewFeedbackSubmitter", fields: [feedbackSubmittedById], references: [id])
-  
+  id                    String          @id @default(cuid())
+  title                 String
+  description           String?
+  scheduledAt           DateTime
+  duration              Int             @default(60)
+  meetingLink           String?
+  notes                 String?
+  status                InterviewStatus @default(SCHEDULED)
+  reminderSent          Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  candidateId           String
+  scheduledById         String
+  communicationRating   Int?
+  culturalFitRating     Int?
+  feedback              String?
+  feedbackSubmitted     Boolean         @default(false)
+  feedbackSubmittedAt   DateTime?
+  feedbackSubmittedById String?
+  nextSteps             String?
+  outcome               String?
+  overallRating         Int?
+  recommendations       String?
+  strengths             String?
+  technicalRating       Int?
+  weaknesses            String?
+  wouldRecommendHiring  Boolean?
+  candidate             Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  feedbackSubmitter     User?           @relation("InterviewFeedbackSubmitter", fields: [feedbackSubmittedById], references: [id])
+  scheduledBy           User            @relation("RecruiterScheduledInterview", fields: [scheduledById], references: [id])
+
   @@map("interviews")
 }
 
 model Notification {
-  id          String             @id @default(cuid())
-  title       String
-  message     String
-  type        NotificationType   @default(INFO)
-  isRead      Boolean            @default(false)
-  senderId    String?            // Optional for system notifications
-  receiverId  String
-  // Interview reminder fields
-  interviewId String?            // Link to interview for reminder notifications
-  scheduledFor DateTime?         // When to send the notification
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  
-  // Relations
-  sender      User?              @relation("NotificationSender", fields: [senderId], references: [id])
-  receiver    User               @relation("NotificationReceiver", fields: [receiverId], references: [id])
-  
+  id           String           @id @default(cuid())
+  title        String
+  message      String
+  type         NotificationType @default(INFO)
+  isRead       Boolean          @default(false)
+  senderId     String?
+  receiverId   String
+  interviewId  String?
+  scheduledFor DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  receiver     User             @relation("NotificationReceiver", fields: [receiverId], references: [id])
+  sender       User?            @relation("NotificationSender", fields: [senderId], references: [id])
+
   @@map("notifications")
 }
 
 model Job {
-  id          String   @id @default(cuid())
-  title       String
-  company     String
-  location    String
-  type        JobType  @default(FULL_TIME)  // Keep for backward compatibility
-  jobTypes    String[] // New field for multiple job types
-  skills      String[] // New field for required skills
-  salary      String
-  description String
+  id           String        @id @default(cuid())
+  title        String
+  company      String
+  location     String
+  type         JobType       @default(FULL_TIME)
+  jobTypes     String[]
+  skills       String[]
+  salary       String
+  description  String
   requirements String[]
-  benefits    String[]
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  benefits     String[]
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   employerId   String
-  employer     User          @relation(fields: [employerId], references: [id], onDelete: Cascade)
   applications Application[]
+  employer     User          @relation(fields: [employerId], references: [id], onDelete: Cascade)
 
   @@map("jobs")
 }
 
 model Application {
-  id          String            @id @default(cuid())
-  status      ApplicationStatus @default(PENDING)
-  coverLetter String?
-  resumeUsed  String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  // Relations
-  jobId      String
-  job        Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  
-  // Support both employee self-applications and recruiter applications
-  employeeId String?
-  employee   User?  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  
-  // Candidate applications (recruiter-submitted)
-  candidateId String?
-  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  
-  // Track who submitted the application (for recruiter applications)
+  id            String            @id @default(cuid())
+  status        ApplicationStatus @default(PENDING)
+  coverLetter   String?
+  resumeUsed    String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  jobId         String
+  employeeId    String?
+  candidateId   String?
   submittedById String?
-  submittedBy   User?   @relation("RecruiterSubmittedApplication", fields: [submittedById], references: [id])
-  
-  @@unique([jobId, employeeId])     // Prevent duplicate employee applications
-  @@unique([jobId, candidateId])    // Prevent duplicate candidate applications
+  candidate     Candidate?        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  employee      User?             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  job           Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  submittedBy   User?             @relation("RecruiterSubmittedApplication", fields: [submittedById], references: [id])
+
+  @@unique([jobId, employeeId])
+  @@unique([jobId, candidateId])
   @@map("applications")
 }
 
 model Resume {
   id              String          @id @default(cuid())
-  filename        String          // Generated filename
-  originalName    String          // User's original filename
-  url            String          // File URL
-  fileSize       Int             // File size in bytes
-  mimeType       String          // File MIME type
-  title          String?         // User-defined title
-  description    String?         // Optional description
-  experienceLevel ExperienceLevel // Categorization
-  isActive       Boolean         @default(true)
-  isPrimary      Boolean         @default(false) // One primary per user/candidate
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  
-  // Support both users and candidates
-  userId         String?
-  user           User?           @relation(fields: [userId], references: [id])
-  
-  candidateId    String?
-  candidate      Candidate?      @relation(fields: [candidateId], references: [id])
-  
+  filename        String
+  originalName    String
+  url             String
+  fileSize        Int
+  mimeType        String
+  title           String?
+  description     String?
+  experienceLevel ExperienceLevel
+  isActive        Boolean         @default(true)
+  isPrimary       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  userId          String?
+  candidateId     String?
+  candidate       Candidate?      @relation(fields: [candidateId], references: [id])
+  user            User?           @relation(fields: [userId], references: [id])
+
   @@map("resumes")
 }
+
 model Placement {
-  id              String        @id @default(cuid())
-  candidateId     String        @unique
-  createdById     String
-  updatedById     String
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Compensation Details
-  salary          Decimal       @db.Decimal(15,2)
-  currency        String        @default("USD")
-  salaryType      SalaryType    @default(ANNUAL)
-  bonus           Decimal?      @db.Decimal(15,2)
-  commission      Decimal?      @db.Decimal(15,2)
-  benefits        String[]
-  
-  // Client Details
-  clientCompany       String
-  clientContactName   String?
-  clientContactEmail  String?
-  clientContactPhone  String?
-  clientAddress       String?
-  clientIndustry      String?
-  
-  // Vendor Details (if through agency)
-  vendorCompany       String?
-  vendorContactName   String?
-  vendorContactEmail  String?
-  vendorContactPhone  String?
-  vendorRate          Decimal?  @db.Decimal(15,2)
-  vendorCommission    Decimal?  @db.Decimal(15,2)
-  
-  // Account Details
-  accountManager      String?
-  placementFee        Decimal?  @db.Decimal(15,2)
-  feeType             FeeType?  @default(PERCENTAGE)
-  feePercentage       Decimal?  @db.Decimal(5,2)
-  paymentTerms        String?
-  
-  // Placement Details
-  jobTitle            String
-  startDate           DateTime?
-  endDate             DateTime?
-  placementType       PlacementType @default(PERMANENT)
-  workLocation        String?
-  workType            WorkType  @default(FULL_TIME)
-  reportingManager    String?
-  
-  // Additional Info
-  notes               String?
-  milestones          Json      @default("[]")
-  documents           String[]  @default([])
-  
-  // Relations
-  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  createdBy           User      @relation("PlacementCreatedBy", fields: [createdById], references: [id])
-  updatedBy           User      @relation("PlacementUpdatedBy", fields: [updatedById], references: [id])
-  placementDocuments  PlacementDocument[]
-  
+  id                     String                   @id @default(cuid())
+  candidateId            String                   @unique
+  createdById            String
+  updatedById            String
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  salary                 Decimal                  @db.Decimal(15, 2)
+  currency               String                   @default("USD")
+  salaryType             SalaryType               @default(ANNUAL)
+  bonus                  Decimal?                 @db.Decimal(15, 2)
+  commission             Decimal?                 @db.Decimal(15, 2)
+  benefits               String[]
+  clientCompany          String
+  clientContactName      String?
+  clientContactEmail     String?
+  clientContactPhone     String?
+  clientAddress          String?
+  clientIndustry         String?
+  vendorCompany          String?
+  vendorContactName      String?
+  vendorContactEmail     String?
+  vendorContactPhone     String?
+  vendorRate             Decimal?                 @db.Decimal(15, 2)
+  vendorCommission       Decimal?                 @db.Decimal(15, 2)
+  accountManager         String?
+  placementFee           Decimal?                 @db.Decimal(15, 2)
+  feeType                FeeType?                 @default(PERCENTAGE)
+  feePercentage          Decimal?                 @db.Decimal(5, 2)
+  paymentTerms           String?
+  jobTitle               String
+  startDate              DateTime?
+  endDate                DateTime?
+  placementType          PlacementType            @default(PERMANENT)
+  workLocation           String?
+  workType               WorkType                 @default(FULL_TIME)
+  reportingManager       String?
+  notes                  String?
+  milestones             Json                     @default("[]")
+  documents              String[]                 @default([])
+  hourlyRate             Decimal?                 @default(75.00) @db.Decimal(8, 2)
+  placementDocuments     PlacementDocument[]
+  placement_time_entries placement_time_entries[]
+  candidate              Candidate                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  createdBy              User                     @relation("PlacementCreatedBy", fields: [createdById], references: [id])
+  updatedBy              User                     @relation("PlacementUpdatedBy", fields: [updatedById], references: [id])
+
   @@map("placements")
 }
 
 model PlacementDocument {
-  id             String    @id @default(cuid())
-  placementId    String
-  filename       String
-  originalName   String
-  url            String
-  fileSize       Int
-  mimeType       String
-  documentType   String?   // CONTRACT, OFFER_LETTER, etc.
-  uploadedById   String
-  createdAt      DateTime  @default(now())
-  
-  // Relations
-  placement      Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
-  uploadedBy     User      @relation("PlacementDocumentUploader", fields: [uploadedById], references: [id])
-  
+  id           String    @id @default(cuid())
+  placementId  String
+  filename     String
+  originalName String
+  url          String
+  fileSize     Int
+  mimeType     String
+  documentType String?
+  uploadedById String
+  createdAt    DateTime  @default(now())
+  placement    Placement @relation(fields: [placementId], references: [id], onDelete: Cascade)
+  uploadedBy   User      @relation("PlacementDocumentUploader", fields: [uploadedById], references: [id])
+
   @@map("placement_documents")
 }
+
 model TimeEntry {
-  id              String        @id @default(cuid())
-  userId          String        // The team member who logged the time
-  date            DateTime      // Date for the time entry
-  hours           Decimal       @db.Decimal(4,2) // Hours worked (e.g., 8.50)
-  description     String?       // Optional description of work done
-  project         String?       // Optional project name
-  status          TimeEntryStatus @default(PENDING)
-  submittedAt     DateTime      @default(now())
-  reviewedAt      DateTime?     // When manager reviewed
-  reviewedById    String?       // Manager who reviewed
-  reviewComments  String?       // Manager's comments
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relations
-  user            User          @relation("UserTimeEntries", fields: [userId], references: [id], onDelete: Cascade)
-  reviewedBy      User?         @relation("ManagerTimeReviews", fields: [reviewedById], references: [id])
-  
+  id             String          @id @default(cuid())
+  userId         String
+  date           DateTime
+  hours          Decimal         @db.Decimal(4, 2)
+  description    String?
+  project        String?
+  status         TimeEntryStatus @default(PENDING)
+  submittedAt    DateTime        @default(now())
+  reviewedAt     DateTime?
+  reviewedById   String?
+  reviewComments String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  reviewedBy     User?           @relation("ManagerTimeReviews", fields: [reviewedById], references: [id])
+  user           User            @relation("UserTimeEntries", fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("time_entries")
 }
 
+model placement_time_entries {
+  id                                               String          @id
+  userId                                           String
+  candidateId                                      String
+  placementId                                      String?
+  date                                             DateTime
+  hours                                            Decimal         @db.Decimal(4, 2)
+  description                                      String
+  category                                         String          @default("account_management")
+  billable                                         Boolean         @default(true)
+  hourlyRate                                       Decimal         @default(75.00) @db.Decimal(8, 2)
+  status                                           TimeEntryStatus @default(PENDING)
+  submittedAt                                      DateTime        @default(now())
+  reviewedAt                                       DateTime?
+  reviewedById                                     String?
+  reviewComments                                   String?
+  createdAt                                        DateTime        @default(now())
+  updatedAt                                        DateTime
+  candidates                                       Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  placements                                       Placement?      @relation(fields: [placementId], references: [id])
+  users_placement_time_entries_reviewedByIdTousers User?           @relation("placement_time_entries_reviewedByIdTousers", fields: [reviewedById], references: [id])
+  users_placement_time_entries_userIdTousers       User            @relation("placement_time_entries_userIdTousers", fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, candidateId, date])
+}
 
 enum TimeEntryStatus {
   PENDING
@@ -408,7 +395,6 @@ enum TimeEntryStatus {
   DRAFT
 }
 
-// Add these new enums to your existing enums section
 enum SalaryType {
   ANNUAL
   MONTHLY
@@ -451,11 +437,11 @@ enum Role {
 
 enum RecruiterType {
   ADMIN
-  TA      // Technical Analyst
-  HR      // Human Resources
-  CS      // Customer Success
-  LEAD    // Lead Recruiter
-  JUNIOR  // Junior Recruiter
+  TA
+  HR
+  CS
+  LEAD
+  JUNIOR
 }
 
 enum NotificationType {

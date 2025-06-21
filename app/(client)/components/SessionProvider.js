@@ -26,7 +26,7 @@ export default function AppSessionProvider({ children, session }) {
     <SessionProvider
       session={session}
       // Reduce session refresh frequency
-      refetchInterval={15 * 60} // 5 minutes instead of default 5 seconds
+      refetchInterval={15 * 60} // 15 minutes instead of default 5 seconds
       refetchOnWindowFocus={false} // Don't refetch on tab focus
       refetchWhenOffline={false} // Don't refetch when coming back online
     >
